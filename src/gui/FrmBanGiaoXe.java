@@ -7,6 +7,7 @@ import dao.XeDAO;
 import entity.KhachHang;
 import entity.NhanVien;
 import entity.PhieuBanGiao;
+import entity.TaiKhoan;
 import entity.Xe;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -27,12 +28,14 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
+import util.MaTuDong;
 
 public class FrmBanGiaoXe extends JPanel {
     private final PhieuBanGiaoDAO phieuBanGiaoDAO = new PhieuBanGiaoDAO();
     private final XeDAO xeDAO = new XeDAO();
     private final KhachHangDAO khachHangDAO = new KhachHangDAO();
     private final NhanVienDAO nhanVienDAO = new NhanVienDAO();
+    private final TaiKhoan taiKhoanHienTai;
 
     private final AppTextField txtMaPhieuBanGiao = new AppTextField(14);
     private final AppComboBox<Xe> cboXe = new AppComboBox<>();
@@ -59,6 +62,11 @@ public class FrmBanGiaoXe extends JPanel {
     private final TableRowSorter<DefaultTableModel> sorterBanGiao = new TableRowSorter<>(modelBanGiao);
 
     public FrmBanGiaoXe() {
+        this(null);
+    }
+
+    public FrmBanGiaoXe(TaiKhoan taiKhoanHienTai) {
+        this.taiKhoanHienTai = taiKhoanHienTai;
         setLayout(new BorderLayout(0, 10));
         setOpaque(false);
 
@@ -81,6 +89,7 @@ public class FrmBanGiaoXe extends JPanel {
         configureComponents();
         napDuLieuDanhMuc();
         napDanhSachPhieu();
+        lamMoiForm();
     }
 
     private JPanel createFormCard() {
@@ -88,7 +97,7 @@ public class FrmBanGiaoXe extends JPanel {
         pnlCard.setLayout(new BorderLayout(0, 10));
 
         JPanel pnlFields = FormUI.createFieldsPanel();
-        FormUI.addField(pnlFields, "Mã phiếu *", txtMaPhieuBanGiao, 0, 0);
+        FormUI.addField(pnlFields, "Mã phiếu (tự động)", txtMaPhieuBanGiao, 0, 0);
         FormUI.addField(pnlFields, "Xe bàn giao *", cboXe, 2, 0);
         FormUI.addField(pnlFields, "Mã khách hàng", txtMaKH, 0, 1);
         FormUI.addField(pnlFields, "Tên khách hàng", txtTenKhachHang, 2, 1);
@@ -163,6 +172,7 @@ public class FrmBanGiaoXe extends JPanel {
     }
 
     private void configureComponents() {
+        txtMaPhieuBanGiao.setEditable(false);
         txtMaPhieuBanGiao.setToolTipText("Mã phiếu duy nhất, ví dụ: PBG001");
         txtMaKH.setEditable(false);
         txtTenKhachHang.setEditable(false);
@@ -259,8 +269,15 @@ public class FrmBanGiaoXe extends JPanel {
             FormUI.showError("Vui lòng nhập đầy đủ các trường bắt buộc.");
             return false;
         }
-        if (!txtSoDienThoaiNguoiNhan.getText().trim().matches("\\d{9,15}")) {
-            FormUI.showError("Số điện thoại người nhận phải gồm 9 đến 15 chữ số.");
+        if (!FormValidator.isValidPhoneNumber(txtSoDienThoaiNguoiNhan.getText().trim())) {
+            FormUI.showError(
+                    "Số điện thoại người nhận không hợp lệ. Ví dụ: 0912345678 hoặc +84912345678.");
+            txtSoDienThoaiNguoiNhan.requestFocus();
+            return false;
+        }
+        if (!FormValidator.isWithinMaxLength(txtTenNguoiNhan.getText().trim(), 100)) {
+            FormUI.showError("Tên người nhận không được vượt quá 100 ký tự.");
+            txtTenNguoiNhan.requestFocus();
             return false;
         }
         return true;
@@ -369,18 +386,34 @@ public class FrmBanGiaoXe extends JPanel {
     }
 
     private void lamMoiForm() {
-        txtMaPhieuBanGiao.setText("");
+        try {
+            txtMaPhieuBanGiao.setText(MaTuDong.sinhMa(
+                    MaTuDong.TIEN_TO_PHIEU_BAN_GIAO,
+                    phieuBanGiaoDAO.findAll(),
+                    PhieuBanGiao::getMaPhieuBanGiao));
+        } catch (SQLException exception) {
+            txtMaPhieuBanGiao.setText("");
+            lblThongBao.setText("Không thể phát sinh mã phiếu bàn giao");
+            FormUI.showError("Không thể phát sinh mã phiếu bàn giao: " + exception.getMessage());
+        }
         if (cboXe.getItemCount() > 0) {
             cboXe.setSelectedIndex(0);
         }
-        if (cboNhanVien.getItemCount() > 0) {
-            cboNhanVien.setSelectedIndex(0);
-        }
+        chonNhanVienDangNhap();
         txtTenNguoiNhan.setText("");
         txtSoDienThoaiNguoiNhan.setText("");
         txaTinhTrangXe.setText("");
         tblBanGiao.clearSelection();
         lblThongBao.setText("Sẵn sàng lập phiếu bàn giao");
+    }
+
+    private void chonNhanVienDangNhap() {
+        String maNV = taiKhoanHienTai == null ? null : taiKhoanHienTai.getMaNV();
+        if (maNV != null) {
+            chonNhanVien(maNV.trim());
+        } else if (cboNhanVien.getItemCount() > 0) {
+            cboNhanVien.setSelectedIndex(0);
+        }
     }
 
     private abstract static class ComboBoxRenderer<T> extends DefaultListCellRenderer {

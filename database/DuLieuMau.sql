@@ -1,3 +1,5 @@
+-- Chỉ chạy sau khi đã chạy QuanLyGaraOto.sql.
+-- Dữ liệu mẫu dùng mã DM* và chỉ được nạp một lần.
 USE a1;
 
 SET XACT_ABORT ON;
@@ -69,6 +71,25 @@ BEGIN TRY
     ('DMPT04', N'Má phanh trước', N'Bộ', 450000, 650000, 15, N'Phụ tùng An Phú', N'Đang kinh doanh'),
     ('DMPT05', N'Ắc quy 12V', N'Bình', 1200000, 1550000, 10, N'Phụ tùng Thành Công', N'Đang kinh doanh');
 
+    INSERT INTO ChinhSachBaoHanh
+        (maCSBH, tenChinhSach, thoiHanBaoHanh, donViThoiGian,
+         dieuKienBaoHanh, truongHopTuChoi, noiDungBaoHanh, trangThai)
+    VALUES
+        ('DMCSBH01', N'Bảo hành phụ tùng lọc', 6, 'THANG',
+         N'Áp dụng khi xuất trình hóa đơn và phụ tùng được lắp đặt tại gara.',
+         N'Không áp dụng với hư hỏng do lắp đặt sai hoặc tác động bên ngoài.',
+         N'Kiểm tra và đổi mới phụ tùng nếu lỗi kỹ thuật được xác nhận.', 1),
+        ('DMCSBH02', N'Bảo hành phụ tùng chính hãng', 12, 'THANG',
+         N'Áp dụng theo số hóa đơn và điều kiện sử dụng bình thường.',
+         N'Từ chối nếu tem bảo hành bị mất hoặc phụ tùng bị tự ý sửa chữa.',
+         N'Kiểm tra, sửa chữa hoặc đổi phụ tùng theo chính sách gara.', 1);
+
+    INSERT INTO ChinhSachBaoHanh_PhuTung (maCSBH, maPhuTung) VALUES
+    ('DMCSBH01', 'DMPT01'),
+    ('DMCSBH01', 'DMPT02'),
+    ('DMCSBH02', 'DMPT04'),
+    ('DMCSBH02', 'DMPT05');
+
     INSERT INTO DichVu (maDV, tenDV, moTaDV, giaDV) VALUES
     ('DMDV01', N'Thay dầu động cơ', N'Thay dầu và kiểm tra mức dầu động cơ.', 250000),
     ('DMDV02', N'Bảo dưỡng hệ thống phanh', N'Kiểm tra và bảo dưỡng hệ thống phanh.', 400000),
@@ -104,33 +125,51 @@ BEGIN TRY
     ('DMSC04', 'DMKT04', 'DMXE04', 'DMKH04', 'DMNV07', '2026-10-16T14:00:00', '2026-10-17T12:00:00', N'Hoàn thành'),
     ('DMSC05', 'DMKT05', 'DMXE05', 'DMKH05', 'DMNV08', '2026-10-17T09:00:00', '2026-10-17T14:00:00', N'Hoàn thành');
 
-    INSERT INTO ChiTietPhieuSuaChua (maPhieuSuaChua, maPhuTung, maDV, soLuong, donGia, tienCong) VALUES
-    ('DMSC01', 'DMPT01', 'DMDV01', 1, 180000, 100000),
-    ('DMSC02', 'DMPT04', 'DMDV02', 1, 650000, 250000),
-    ('DMSC03', 'DMPT02', 'DMDV03', 1, 220000, 80000),
-    ('DMSC04', 'DMPT05', 'DMDV04', 1, 1550000, 120000),
-    ('DMSC05', 'DMPT03', 'DMDV05', 1, 130000, 200000);
+    INSERT INTO ChiTietPhieuSuaChua (maPhieuSuaChua, maPhuTung, maDV, soLuong, donGia) VALUES
+    ('DMSC01', NULL, 'DMDV01', 1, 250000),
+    ('DMSC01', 'DMPT01', NULL, 1, 180000),
+    ('DMSC02', 'DMPT04', NULL, 1, 650000),
+    ('DMSC03', NULL, 'DMDV03', 1, 150000),
+    ('DMSC04', 'DMPT05', NULL, 1, 1550000),
+    ('DMSC05', NULL, 'DMDV05', 1, 500000);
 
     INSERT INTO HoaDon (maHoaDon, maPhieuSuaChua, maNV, maKM, ngayLap, tienGiamGia, thueVAT, soTien, trangThai) VALUES
-    ('DMHD01', 'DMSC01', 'DMNV01', 'DMKM03', '2026-10-15T12:00:00', 37100, 8, 532332, N'Đã thanh toán'),
-    ('DMHD02', 'DMSC02', 'DMNV02', 'DMKM02', '2026-10-15T15:00:00', 130000, 8, 1263600, N'Đã thanh toán'),
-    ('DMHD03', 'DMSC03', 'DMNV03', 'DMKM01', '2026-10-16T16:00:00', 22500, 8, 461700, N'Đã thanh toán'),
-    ('DMHD04', 'DMSC04', 'DMNV01', 'DMKM04', '2026-10-17T12:00:00', 149600, 8, 1858032, N'Chưa thanh toán'),
-    ('DMHD05', 'DMSC05', 'DMNV02', 'DMKM05', '2026-10-17T14:00:00', 99600, 8, 788832, N'Đã thanh toán');
+    ('DMHD01', 'DMSC01', 'DMNV01', 'DMKM03', '2026-10-15T12:00:00', 32508, 34400, 431892, N'Đã thanh toán'),
+    ('DMHD02', 'DMSC02', 'DMNV02', 'DMKM02', '2026-10-15T15:00:00', 70200, 52000, 631800, N'Đã thanh toán'),
+    ('DMHD03', 'DMSC03', 'DMNV03', 'DMKM01', '2026-10-16T16:00:00', 8100, 12000, 153900, N'Đã thanh toán'),
+    ('DMHD04', 'DMSC04', 'DMNV01', 'DMKM04', '2026-10-17T12:00:00', 133920, 124000, 1540080, N'Chưa thanh toán'),
+    ('DMHD05', 'DMSC05', 'DMNV02', 'DMKM05', '2026-10-17T14:00:00', 64800, 40000, 475200, N'Đã thanh toán');
 
     INSERT INTO ChiTietHoaDon (maHoaDon, maPhieuSuaChua, maPhuTung, maDV, soLuong, donGia) VALUES
-    ('DMHD01', 'DMSC01', 'DMPT01', 'DMDV01', 1, 180000),
-    ('DMHD02', 'DMSC02', 'DMPT04', 'DMDV02', 1, 650000),
-    ('DMHD03', 'DMSC03', 'DMPT02', 'DMDV03', 1, 220000),
-    ('DMHD04', 'DMSC04', 'DMPT05', 'DMDV04', 1, 1550000),
-    ('DMHD05', 'DMSC05', 'DMPT03', 'DMDV05', 1, 130000);
+    ('DMHD01', 'DMSC01', NULL, 'DMDV01', 1, 250000),
+    ('DMHD01', 'DMSC01', 'DMPT01', NULL, 1, 180000),
+    ('DMHD02', 'DMSC02', 'DMPT04', NULL, 1, 650000),
+    ('DMHD03', 'DMSC03', NULL, 'DMDV03', 1, 150000),
+    ('DMHD04', 'DMSC04', 'DMPT05', NULL, 1, 1550000),
+    ('DMHD05', 'DMSC05', NULL, 'DMDV05', 1, 500000);
 
-    INSERT INTO GiaoDichThanhToan (maGD, maHoaDon, phuongThucThanhToan, thoiGianGD, trangThaiGD) VALUES
-    ('DMGD01', 'DMHD01', N'Tiền mặt', '2026-10-15T12:10:00', N'Thành công'),
-    ('DMGD02', 'DMHD02', N'Chuyển khoản', '2026-10-15T15:10:00', N'Thành công'),
-    ('DMGD03', 'DMHD03', N'Tiền mặt', '2026-10-16T16:10:00', N'Thành công'),
-    ('DMGD04', 'DMHD04', N'Tiền mặt', '2026-10-17T12:10:00', N'Chờ thanh toán'),
-    ('DMGD05', 'DMHD05', N'Chuyển khoản', '2026-10-17T14:10:00', N'Thành công');
+    INSERT INTO PhieuYeuCauBaoHanh
+        (maPhieuYCBH, maHoaDon, maPhuTung, soLuong, ngayTiepNhan,
+         trangThai, lyDo, ghiChuXuLy, ngayXuLy, ngayHoanThanh)
+    VALUES
+        ('DMYCBH01', 'DMHD01', 'DMPT01', 1, '2026-10-20T09:00:00',
+         N'Chờ xử lý', N'Lọc dầu có dấu hiệu rò rỉ trong thời hạn bảo hành.', NULL, NULL, NULL),
+        ('DMYCBH02', 'DMHD02', 'DMPT04', 1, '2026-10-21T10:30:00',
+         N'Chấp nhận bảo hành', N'Má phanh phát tiếng kêu bất thường.', N'Đã tiếp nhận phụ tùng đổi trả.', '2026-10-21T11:00:00', NULL),
+        ('DMYCBH03', 'DMHD04', 'DMPT05', 1, '2026-10-22T13:00:00',
+         N'Hoàn thành bảo hành', N'Ắc quy không giữ điện.', N'Đã thay thế và kiểm tra hệ thống sạc.', '2026-10-22T13:30:00', '2026-10-22T15:00:00'),
+        ('DMYCBH04', 'DMHD01', 'DMPT01', 1, '2026-10-23T08:45:00',
+         N'Từ chối bảo hành', N'Vỏ phụ tùng bị nứt do va đập.', N'Không thuộc điều kiện bảo hành.', '2026-10-23T09:15:00', NULL);
+
+    -- Hai yêu cầu đã được chấp nhận/hoàn thành đã nhập trả mỗi phụ tùng một đơn vị.
+    UPDATE PhuTung SET soLuongTon = soLuongTon + 1 WHERE maPhuTung IN ('DMPT04', 'DMPT05');
+
+    INSERT INTO GiaoDichThanhToan (maGD, maHoaDon, phuongThucThanhToan, thoiGianGD, trangThaiGD, soTienThanhToan) VALUES
+    ('DMGD01', 'DMHD01', N'Tiền mặt', '2026-10-15T12:10:00', N'Thành công', 431892),
+    ('DMGD02', 'DMHD02', N'Chuyển khoản', '2026-10-15T15:10:00', N'Thành công', 631800),
+    ('DMGD03', 'DMHD03', N'Tiền mặt', '2026-10-16T16:10:00', N'Thành công', 153900),
+    ('DMGD04', 'DMHD04', N'Tiền mặt', '2026-10-17T12:10:00', N'Chờ thanh toán', 0),
+    ('DMGD05', 'DMHD05', N'Chuyển khoản', '2026-10-17T14:10:00', N'Thành công', 475200);
 
     INSERT INTO PhieuBaoHanh (maPhieuBaoHanh, maNV, maKH, maXe, ngayHetHanBaoHanh, noiDungBaoHanh, dieuKienBaoHanh) VALUES
     ('DMBH01', 'DMNV04', 'DMKH01', 'DMXE01', '2027-10-15', N'Bảo hành công việc thay dầu.', N'Áp dụng khi bảo dưỡng đúng lịch.'),
