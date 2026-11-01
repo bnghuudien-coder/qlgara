@@ -77,6 +77,32 @@ CREATE TABLE PhuTung (
     trangThai NVARCHAR(20)
 );
 
+CREATE TABLE ChinhSachBaoHanh (
+    maCSBH VARCHAR(10) PRIMARY KEY,
+    tenChinhSach NVARCHAR(150) NOT NULL,
+    thoiHanBaoHanh INT NOT NULL,
+    donViThoiGian VARCHAR(10) NOT NULL,
+    dieuKienBaoHanh NVARCHAR(1000),
+    truongHopTuChoi NVARCHAR(1000),
+    noiDungBaoHanh NVARCHAR(1000),
+    ngayTao DATETIME2 NOT NULL CONSTRAINT DF_CSBH_ngayTao DEFAULT SYSDATETIME(),
+    trangThai BIT NOT NULL CONSTRAINT DF_CSBH_trangThai DEFAULT 1,
+    CONSTRAINT CK_CSBH_thoiHan CHECK (thoiHanBaoHanh > 0),
+    CONSTRAINT CK_CSBH_donVi CHECK (donViThoiGian IN ('NGAY', 'THANG', 'NAM'))
+);
+
+CREATE TABLE ChinhSachBaoHanh_PhuTung (
+    maCSBH VARCHAR(10) NOT NULL,
+    maPhuTung VARCHAR(20) NOT NULL,
+    CONSTRAINT PK_CSBH_PhuTung PRIMARY KEY (maCSBH, maPhuTung),
+    CONSTRAINT FK_CSBHPT_ChinhSach FOREIGN KEY (maCSBH)
+        REFERENCES ChinhSachBaoHanh(maCSBH) ON DELETE CASCADE,
+    CONSTRAINT FK_CSBHPT_PhuTung FOREIGN KEY (maPhuTung)
+        REFERENCES PhuTung(maPhuTung)
+);
+
+CREATE INDEX IX_CSBHPT_PhuTung ON ChinhSachBaoHanh_PhuTung(maPhuTung, maCSBH);
+
 CREATE TABLE DichVu (
     maDV VARCHAR(20) PRIMARY KEY,
     tenDV NVARCHAR(100) NOT NULL,
@@ -181,6 +207,29 @@ CREATE TABLE ChiTietHoaDon (
     CONSTRAINT FK_CTHD_PhuTung FOREIGN KEY (maPhuTung) REFERENCES PhuTung(maPhuTung),
     CONSTRAINT FK_CTHD_DichVu FOREIGN KEY (maDV) REFERENCES DichVu(maDV)
 );
+
+CREATE TABLE PhieuYeuCauBaoHanh (
+    maPhieuYCBH VARCHAR(20) PRIMARY KEY,
+    maHoaDon VARCHAR(20) NOT NULL,
+    maPhuTung VARCHAR(20) NOT NULL,
+    soLuong INT NOT NULL,
+    ngayTiepNhan DATETIME2 NOT NULL CONSTRAINT DF_PYCBH_ngayTiepNhan DEFAULT SYSDATETIME(),
+    trangThai NVARCHAR(30) NOT NULL CONSTRAINT DF_PYCBH_trangThai DEFAULT N'Chờ xử lý',
+    lyDo NVARCHAR(1000),
+    ghiChuXuLy NVARCHAR(1000),
+    ngayXuLy DATETIME2,
+    ngayHoanThanh DATETIME2,
+    CONSTRAINT CK_PYCBH_soLuong CHECK (soLuong > 0),
+    CONSTRAINT CK_PYCBH_trangThai CHECK (
+        trangThai IN (N'Chờ xử lý', N'Chấp nhận bảo hành',
+                      N'Hoàn thành bảo hành', N'Từ chối bảo hành')
+    ),
+    CONSTRAINT FK_PYCBH_HoaDon FOREIGN KEY (maHoaDon) REFERENCES HoaDon(maHoaDon),
+    CONSTRAINT FK_PYCBH_PhuTung FOREIGN KEY (maPhuTung) REFERENCES PhuTung(maPhuTung)
+);
+
+CREATE INDEX IX_PYCBH_trangThai_ngayTiepNhan
+    ON PhieuYeuCauBaoHanh(trangThai, ngayTiepNhan DESC);
 
 CREATE TABLE GiaoDichThanhToan (
     maGD VARCHAR(20) PRIMARY KEY,

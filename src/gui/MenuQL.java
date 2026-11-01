@@ -25,13 +25,13 @@ public class MenuQL extends JMenuBar {
 		themItem(mnuSystem, "Quản lý tài khoản", "Phân quyền", "Sao lưu dữ liệu",
 				"Đổi mật khẩu", "Đăng xuất");
 		themItem(mnuCatalog, "Khách hàng", "Xe", "Nhân viên", "Phụ tùng",
-				"Dịch vụ sửa chữa", "Khuyến mãi", "Ca làm việc");
+				"Dịch vụ sửa chữa", "Khuyến mãi", "Ca làm việc", "Chính sách bảo hành");
 		themItem(mnuUpdate, "Cập nhật khách hàng", "Cập nhật xe", "Cập nhật nhân viên",
 				"Cập nhật phụ tùng", "Cập nhật giá phụ tùng", "Cập nhật dịch vụ",
 				"Cập nhật khuyến mãi", "Cập nhật lịch làm việc");
 		themItem(mnuProcess, "Tiếp nhận xe", "Kiểm tra xe", "Lập phiếu sửa chữa",
 				"Nhập/Xuất phụ tùng", "Lập hóa đơn",
-				"Thanh toán", "Quản lý công nợ", "Bàn giao xe");
+				"Thanh toán", "Tiếp nhận bảo hành", "Quản lý công nợ", "Bàn giao xe");
 		themItem(mnuSearch, "Khách hàng", "Xe", "Lịch sử sửa chữa", "Phiếu tiếp nhận",
 				"Phiếu sửa chữa", "Hóa đơn", "Phụ tùng", "Tìm kiếm nhân viên");
 		themItem(mnuReports, "Doanh thu", "Sửa chữa", "Khách hàng", "Phụ tùng tồn kho",

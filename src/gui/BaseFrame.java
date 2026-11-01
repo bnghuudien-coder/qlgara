@@ -60,6 +60,21 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Quản lý ca làm việc");
 			return;
 		}
+		if ("Chính sách bảo hành".equals(featureName)) {
+			setContent(new FrmChinhSachBaoHanh());
+			lblStatus.setText("Quản lý chính sách bảo hành");
+			return;
+		}
+		if ("Tiếp nhận bảo hành".equals(featureName)) {
+			setContent(new FrmTiepNhanBaoHanh());
+			lblStatus.setText("Tiếp nhận bảo hành");
+			return;
+		}
+		if ("Quản lý công nợ".equals(featureName)) {
+			setContent(new FrmCongNo());
+			lblStatus.setText("Quản lý công nợ");
+			return;
+		}
 		if ("Khách hàng".equals(featureName) || "Cập nhật khách hàng".equals(featureName)) {
 			setContent(new FrmKhachHang());
 			lblStatus.setText("Quản lý khách hàng");

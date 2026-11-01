@@ -11,7 +11,7 @@ import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.table.*;
 
-public class FrmCongNo extends JFrame {
+public class FrmCongNo extends JPanel {
     // Màu sắc
     private static final Color BLUE = new Color(25, 100, 235);
     private static final Color BLUE_DARK = new Color(18, 72, 180);
@@ -92,43 +92,23 @@ public class FrmCongNo extends JFrame {
 
     // KHỞI TẠO
     public FrmCongNo() {
-        setTitle("QUẢN LÝ CÔNG NỢ");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setMinimumSize(new Dimension(1050, 680));
-        setSize(1250, 780);
-        setLocationRelativeTo(null);
         setLayout(new BorderLayout());
-        getContentPane().setBackground(BG);
+        setOpaque(false);
 
-        add(dungTieuDe(), BorderLayout.NORTH);
-        add(dungKhungChinh(), BorderLayout.CENTER);
+        JPanel pnlNoiDung = new JPanel(new BorderLayout(0, 12));
+        pnlNoiDung.setOpaque(false);
+        pnlNoiDung.add(dungKhungTimKiem(), BorderLayout.NORTH);
+        pnlNoiDung.add(dungKhungDanhSach(), BorderLayout.CENTER);
+        add(FormUI.createPage("QUẢN LÝ CÔNG NỢ",
+                "Theo dõi công nợ khách hàng và các hóa đơn chưa thanh toán", pnlNoiDung),
+                BorderLayout.CENTER);
         ganSuKien();
         taiDuLieu();
     }
 
-    // GIAO DIỆN CHÍNH
-    private JLabel dungTieuDe() {
-        JLabel lblTieuDe = new JLabel("QUẢN LÝ CÔNG NỢ", SwingConstants.CENTER);
-        lblTieuDe.setForeground(Color.BLACK);
-        lblTieuDe.setFont(font(Font.BOLD, 28));
-        lblTieuDe.setBorder(new EmptyBorder(15, 0, 12, 0));
-        return lblTieuDe;
-    }
-
-    private JPanel dungKhungChinh() {
-        JPanel pnlChinh = new JPanel(new BorderLayout(0, 12));
-        pnlChinh.setBackground(BG);
-        pnlChinh.setBorder(new EmptyBorder(0, 14, 14, 14));
-        pnlChinh.add(dungKhungTimKiem(), BorderLayout.NORTH);
-        pnlChinh.add(dungKhungDanhSach(), BorderLayout.CENTER);
-        return pnlChinh;
-    }
-
     // Phần 1: tìm kiếm / lọc (gọn trên một hàng)
     private JPanel dungKhungTimKiem() {
-        JPanel pnlTimKiem = new JPanel(new GridBagLayout());
-        pnlTimKiem.setBackground(Color.WHITE);
-        pnlTimKiem.setBorder(new CompoundBorder(new LineBorder(BORDER), new EmptyBorder(10, 14, 12, 14)));
+        JPanel pnlTimKiem = AppPanel.card(new GridBagLayout());
 
         txtTimKiem.setFont(font(Font.PLAIN, 12));
         txtTimKiem.setBorder(new CompoundBorder(new LineBorder(BORDER), new EmptyBorder(6, 9, 6, 9)));
@@ -154,15 +134,15 @@ public class FrmCongNo extends JFrame {
 
         g.gridx = 0;
         g.weightx = 1; // ô từ khóa giãn theo chiều ngang
-        pnlTimKiem.add(taoOLoc("Từ khóa (mã KH, tên KH, SĐT, mã hóa đơn)", txtTimKiem, 260), g);
+        pnlTimKiem.add(taoOLoc("Từ khóa (mã KH, tên KH, SĐT, mã hóa đơn)", txtTimKiem, 210), g);
 
         g.weightx = 0;
         g.gridx = 1;
-        pnlTimKiem.add(taoOLoc("Khoảng nợ", cmbNhomKH, 150), g);
+        pnlTimKiem.add(taoOLoc("Khoảng nợ", cmbNhomKH, 120), g);
         g.gridx = 2;
-        pnlTimKiem.add(taoOLoc("Trạng thái", cmbTrangThai, 140), g);
+        pnlTimKiem.add(taoOLoc("Trạng thái", cmbTrangThai, 110), g);
         g.gridx = 3;
-        pnlTimKiem.add(taoOLoc("Thời gian phát sinh", cmbThoiGian, 170), g);
+        pnlTimKiem.add(taoOLoc("Thời gian phát sinh", cmbThoiGian, 130), g);
 
         g.gridx = 4;
         g.insets = new Insets(0, 0, 0, 0);
@@ -193,12 +173,12 @@ public class FrmCongNo extends JFrame {
 
     // Phần 2: danh sách công nợ
     private JPanel dungKhungDanhSach() {
-        JPanel pnlDanhSach = taoPnlThe();
+        JPanel pnlDanhSach = FormUI.createCard();
         pnlDanhSach.setLayout(new BorderLayout(0, 10));
 
         JPanel pnlTieuDe = new JPanel(new BorderLayout());
         pnlTieuDe.setOpaque(false);
-        pnlTieuDe.add(taoTieuMuc("Danh sách công nợ"), BorderLayout.WEST);
+        pnlTieuDe.add(FormUI.createSectionTitle("Danh sách công nợ"), BorderLayout.WEST);
         pnlTieuDe.add(dungThongKeNhanh(), BorderLayout.EAST);
         pnlDanhSach.add(pnlTieuDe, BorderLayout.NORTH);
 
@@ -416,7 +396,8 @@ public class FrmCongNo extends JFrame {
         private boolean dangDongBo = false;
 
         DlgChiTietCongNo(String maKH) {
-            super(FrmCongNo.this, "Chi tiết công nợ", true);
+            super(SwingUtilities.getWindowAncestor(FrmCongNo.this),
+                    "Chi tiết công nợ", Dialog.ModalityType.APPLICATION_MODAL);
             this.maKH = maKH;
 
             setLayout(new BorderLayout());
@@ -732,17 +713,11 @@ public class FrmCongNo extends JFrame {
     }
 
     private static JScrollPane taoScr(JTable tbl) {
-        JScrollPane scr = new JScrollPane(tbl);
-        scr.setBorder(new LineBorder(BORDER));
-        scr.getViewport().setBackground(Color.WHITE);
-        return scr;
+        return new AppScrollPane(tbl);
     }
 
     private static JPanel taoPnlThe() {
-        JPanel pnl = new JPanel();
-        pnl.setBackground(Color.WHITE);
-        pnl.setBorder(new CompoundBorder(new LineBorder(BORDER), new EmptyBorder(12, 14, 12, 14)));
-        return pnl;
+        return FormUI.createCard();
     }
 
     private static JLabel taoTieuMuc(String chu) {
@@ -883,7 +858,13 @@ public class FrmCongNo extends JFrame {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {
             }
-            new FrmCongNo().setVisible(true);
+            JFrame frmCongNo = new JFrame("QUẢN LÝ CÔNG NỢ");
+            frmCongNo.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frmCongNo.setMinimumSize(new Dimension(1050, 680));
+            frmCongNo.setSize(1250, 780);
+            frmCongNo.setLocationRelativeTo(null);
+            frmCongNo.setContentPane(new FrmCongNo());
+            frmCongNo.setVisible(true);
         });
     }
 }

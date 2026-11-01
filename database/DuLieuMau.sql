@@ -71,6 +71,25 @@ BEGIN TRY
     ('DMPT04', N'Má phanh trước', N'Bộ', 450000, 650000, 15, N'Phụ tùng An Phú', N'Đang kinh doanh'),
     ('DMPT05', N'Ắc quy 12V', N'Bình', 1200000, 1550000, 10, N'Phụ tùng Thành Công', N'Đang kinh doanh');
 
+    INSERT INTO ChinhSachBaoHanh
+        (maCSBH, tenChinhSach, thoiHanBaoHanh, donViThoiGian,
+         dieuKienBaoHanh, truongHopTuChoi, noiDungBaoHanh, trangThai)
+    VALUES
+        ('DMCSBH01', N'Bảo hành phụ tùng lọc', 6, 'THANG',
+         N'Áp dụng khi xuất trình hóa đơn và phụ tùng được lắp đặt tại gara.',
+         N'Không áp dụng với hư hỏng do lắp đặt sai hoặc tác động bên ngoài.',
+         N'Kiểm tra và đổi mới phụ tùng nếu lỗi kỹ thuật được xác nhận.', 1),
+        ('DMCSBH02', N'Bảo hành phụ tùng chính hãng', 12, 'THANG',
+         N'Áp dụng theo số hóa đơn và điều kiện sử dụng bình thường.',
+         N'Từ chối nếu tem bảo hành bị mất hoặc phụ tùng bị tự ý sửa chữa.',
+         N'Kiểm tra, sửa chữa hoặc đổi phụ tùng theo chính sách gara.', 1);
+
+    INSERT INTO ChinhSachBaoHanh_PhuTung (maCSBH, maPhuTung) VALUES
+    ('DMCSBH01', 'DMPT01'),
+    ('DMCSBH01', 'DMPT02'),
+    ('DMCSBH02', 'DMPT04'),
+    ('DMCSBH02', 'DMPT05');
+
     INSERT INTO DichVu (maDV, tenDV, moTaDV, giaDV) VALUES
     ('DMDV01', N'Thay dầu động cơ', N'Thay dầu và kiểm tra mức dầu động cơ.', 250000),
     ('DMDV02', N'Bảo dưỡng hệ thống phanh', N'Kiểm tra và bảo dưỡng hệ thống phanh.', 400000),
@@ -128,6 +147,22 @@ BEGIN TRY
     ('DMHD03', 'DMSC03', NULL, 'DMDV03', 1, 150000),
     ('DMHD04', 'DMSC04', 'DMPT05', NULL, 1, 1550000),
     ('DMHD05', 'DMSC05', NULL, 'DMDV05', 1, 500000);
+
+    INSERT INTO PhieuYeuCauBaoHanh
+        (maPhieuYCBH, maHoaDon, maPhuTung, soLuong, ngayTiepNhan,
+         trangThai, lyDo, ghiChuXuLy, ngayXuLy, ngayHoanThanh)
+    VALUES
+        ('DMYCBH01', 'DMHD01', 'DMPT01', 1, '2026-10-20T09:00:00',
+         N'Chờ xử lý', N'Lọc dầu có dấu hiệu rò rỉ trong thời hạn bảo hành.', NULL, NULL, NULL),
+        ('DMYCBH02', 'DMHD02', 'DMPT04', 1, '2026-10-21T10:30:00',
+         N'Chấp nhận bảo hành', N'Má phanh phát tiếng kêu bất thường.', N'Đã tiếp nhận phụ tùng đổi trả.', '2026-10-21T11:00:00', NULL),
+        ('DMYCBH03', 'DMHD04', 'DMPT05', 1, '2026-10-22T13:00:00',
+         N'Hoàn thành bảo hành', N'Ắc quy không giữ điện.', N'Đã thay thế và kiểm tra hệ thống sạc.', '2026-10-22T13:30:00', '2026-10-22T15:00:00'),
+        ('DMYCBH04', 'DMHD01', 'DMPT01', 1, '2026-10-23T08:45:00',
+         N'Từ chối bảo hành', N'Vỏ phụ tùng bị nứt do va đập.', N'Không thuộc điều kiện bảo hành.', '2026-10-23T09:15:00', NULL);
+
+    -- Hai yêu cầu đã được chấp nhận/hoàn thành đã nhập trả mỗi phụ tùng một đơn vị.
+    UPDATE PhuTung SET soLuongTon = soLuongTon + 1 WHERE maPhuTung IN ('DMPT04', 'DMPT05');
 
     INSERT INTO GiaoDichThanhToan (maGD, maHoaDon, phuongThucThanhToan, thoiGianGD, trangThaiGD, soTienThanhToan) VALUES
     ('DMGD01', 'DMHD01', N'Tiền mặt', '2026-10-15T12:10:00', N'Thành công', 431892),

@@ -5,6 +5,8 @@ import dao.HoaDonDAO.DongChiTiet;
 import dao.HoaDonDAO.KhuyenMai;
 import dao.HoaDonDAO.Phieu;
 import dao.HoaDonDAO.PhuTung;
+import dao.ChinhSachBaoHanhDAO;
+import dao.ChinhSachBaoHanhDAO.PhuTungBaoHanh;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -49,6 +51,7 @@ public class FrmHoaDon extends JPanel {
     private static final DateTimeFormatter DINH_DANG_NGAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     // 2. THÀNH PHẦN VÀ TRẠNG THÁI
     private final HoaDonDAO hoaDonDAO = new HoaDonDAO();
+    private final ChinhSachBaoHanhDAO chinhSachBaoHanhDAO = new ChinhSachBaoHanhDAO();
     // Thông tin hóa đơn
     private final JTextField txtMaHoaDon = new JTextField("Tự động");
     private final JTextField txtNgayLap = new JTextField(LocalDate.now().format(DINH_DANG_NGAY));
@@ -113,6 +116,25 @@ public class FrmHoaDon extends JPanel {
             return c;
         }
     };
+    private final DefaultTableModel modelBaoHanh = new DefaultTableModel(
+            new Object[] { "Phụ tùng", "Số lượng", "Chính sách", "Thời hạn bảo hành" }, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    private final List<PhuTungBaoHanh> dsBaoHanhHienThi = new ArrayList<>();
+    private final JTable tblBaoHanh = new JTable(modelBaoHanh) {
+        @Override
+        public String getToolTipText(java.awt.event.MouseEvent event) {
+            int row = rowAtPoint(event.getPoint());
+            int modelRow = row < 0 ? -1 : convertRowIndexToModel(row);
+            return modelRow < 0 || modelRow >= dsBaoHanhHienThi.size()
+                    ? null
+                    : taoThongTinBaoHanhTooltip(dsBaoHanhHienThi.get(modelRow));
+        }
+    };
+    private final JLabel lblTinhTrangBaoHanh = new JLabel("Chọn phiếu sửa chữa để kiểm tra bảo hành.");
     private final JButton btnThemHoaDon = taoNut("Thêm");
 
     // 3. KHỞI TẠO
@@ -127,6 +149,7 @@ public class FrmHoaDon extends JPanel {
         setBorder(new EmptyBorder(14, 18, 14, 18));
         kieuCacOComponent();
         cauHinhBang();
+        cauHinhBangBaoHanh();
         add(taoTieuDe(), BorderLayout.NORTH);
         add(taoVungCuon(), BorderLayout.CENTER);
 
@@ -391,9 +414,54 @@ public class FrmHoaDon extends JPanel {
         pnlNut.add(btnLamMoi);
         pnlNut.add(btnXoaDong);
 
-        the.noiDung.add(scroll, BorderLayout.CENTER);
+        JPanel pnlChiTietVaBaoHanh = new JPanel(new BorderLayout(0, 10));
+        pnlChiTietVaBaoHanh.setOpaque(false);
+        pnlChiTietVaBaoHanh.add(scroll, BorderLayout.CENTER);
+        pnlChiTietVaBaoHanh.add(taoTheBaoHanh(), BorderLayout.SOUTH);
+
+        the.noiDung.add(pnlChiTietVaBaoHanh, BorderLayout.CENTER);
         the.noiDung.add(pnlNut, BorderLayout.SOUTH);
         return the;
+    }
+
+    private JPanel taoTheBaoHanh() {
+        JPanel pnlBaoHanh = new JPanel(new BorderLayout(0, 5));
+        pnlBaoHanh.setOpaque(false);
+        JPanel pnlTieuDe = new JPanel(new BorderLayout(8, 0));
+        pnlTieuDe.setOpaque(false);
+        JLabel lblTieuDe = new JLabel("PHỤ TÙNG ĐƯỢC BẢO HÀNH");
+        lblTieuDe.setFont(FONT_DAM);
+        lblTieuDe.setForeground(MAU_NUT_DAM);
+        lblTinhTrangBaoHanh.setFont(FONT_THUONG);
+        lblTinhTrangBaoHanh.setForeground(MAU_PHU);
+        lblTinhTrangBaoHanh.setToolTipText("Thời hạn bảo hành được tính từ ngày lập hóa đơn.");
+        pnlTieuDe.add(lblTieuDe, BorderLayout.WEST);
+        pnlTieuDe.add(lblTinhTrangBaoHanh, BorderLayout.EAST);
+
+        JScrollPane scrBaoHanh = new JScrollPane(tblBaoHanh);
+        scrBaoHanh.setBorder(BorderFactory.createLineBorder(MAU_VIEN));
+        scrBaoHanh.getViewport().setBackground(Color.WHITE);
+        scrBaoHanh.setPreferredSize(new Dimension(500, 112));
+        pnlBaoHanh.add(pnlTieuDe, BorderLayout.NORTH);
+        pnlBaoHanh.add(scrBaoHanh, BorderLayout.CENTER);
+        return pnlBaoHanh;
+    }
+
+    private void cauHinhBangBaoHanh() {
+        tblBaoHanh.setFont(FONT_THUONG);
+        tblBaoHanh.setRowHeight(28);
+        tblBaoHanh.setShowVerticalLines(false);
+        tblBaoHanh.setGridColor(MAU_VIEN);
+        tblBaoHanh.setFillsViewportHeight(true);
+        tblBaoHanh.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        tblBaoHanh.getTableHeader().setReorderingAllowed(false);
+        tblBaoHanh.getTableHeader().setFont(FONT_DAM);
+        tblBaoHanh.getTableHeader().setBackground(new Color(240, 245, 255));
+        tblBaoHanh.getTableHeader().setForeground(MAU_CHU);
+        int[] rong = { 190, 75, 190, 190 };
+        for (int i = 0; i < rong.length; i++) {
+            tblBaoHanh.getColumnModel().getColumn(i).setPreferredWidth(rong[i]);
+        }
     }
 
     private The taoTheTongKet() {
@@ -678,6 +746,22 @@ public class FrmHoaDon extends JPanel {
                 napThongTinPhieu(ma);
             }
         });
+        txtNgayLap.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent event) {
+                capNhatThoiHanBaoHanhTrongBang();
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent event) {
+                capNhatThoiHanBaoHanhTrongBang();
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent event) {
+                capNhatThoiHanBaoHanhTrongBang();
+            }
+        });
 
         cboPhuTung.addActionListener(e -> capNhatDonGiaPhuTung());
         cboKhuyenMai.addActionListener(e -> tinhTongHoaDon());
@@ -701,6 +785,9 @@ public class FrmHoaDon extends JPanel {
             t.setText("");
         }
         modelChiTiet.setRowCount(0);
+        modelBaoHanh.setRowCount(0);
+        dsBaoHanhHienThi.clear();
+        lblTinhTrangBaoHanh.setText("Chọn phiếu sửa chữa để kiểm tra bảo hành.");
         lamMoiNhapLieu();
 
         pnlNguon.revalidate();
@@ -727,6 +814,9 @@ public class FrmHoaDon extends JPanel {
 
     /** Điền thông tin khách, xe, nhân viên và chi tiết từ phiếu sửa chữa. */
     private boolean napThongTinPhieu(String maPhieu) {
+        modelBaoHanh.setRowCount(0);
+        dsBaoHanhHienThi.clear();
+        lblTinhTrangBaoHanh.setText("Đang kiểm tra chính sách bảo hành...");
         try {
             Phieu p = hoaDonDAO.layPhieu(maPhieu);
             if (p == null) {
@@ -743,14 +833,83 @@ public class FrmHoaDon extends JPanel {
             modelChiTiet.setRowCount(0);
             List<DongChiTiet> ds = hoaDonDAO.layChiTietPhieu(maPhieu);
             ds.forEach(this::themDongChiTiet);
+            napDanhSachBaoHanh(maPhieu);
             if (ds.isEmpty()) {
                 canhBao("Phiếu sửa chữa chưa có dịch vụ hoặc phụ tùng.");
             }
             return true;
         } catch (SQLException ex) {
-            baoLoi("Không thể tải thông tin phiếu", ex);
+            baoLoi("Không thể tải thông tin phiếu hoặc kiểm tra bảo hành", ex);
             return false;
         }
+    }
+
+    private void napDanhSachBaoHanh(String maPhieu) throws SQLException {
+        modelBaoHanh.setRowCount(0);
+        dsBaoHanhHienThi.clear();
+        dsBaoHanhHienThi.addAll(chinhSachBaoHanhDAO.layPhuTungBaoHanhTheoPhieu(maPhieu));
+        List<PhuTungBaoHanh> dsBaoHanh = dsBaoHanhHienThi;
+        for (PhuTungBaoHanh baoHanh : dsBaoHanh) {
+            String thoiHan = hienThiThoiHanBaoHanh(baoHanh);
+            modelBaoHanh.addRow(new Object[] {
+                    baoHanh.tenPhuTung(),
+                    baoHanh.soLuong(),
+                    baoHanh.tenChinhSach(),
+                    thoiHan
+            });
+        }
+        lblTinhTrangBaoHanh.setText(dsBaoHanh.isEmpty()
+                ? "Phiếu này không có phụ tùng thuộc chính sách đang áp dụng."
+                : dsBaoHanh.size() + " phụ tùng được áp dụng bảo hành");
+    }
+
+    private void capNhatThoiHanBaoHanhTrongBang() {
+        for (int row = 0; row < dsBaoHanhHienThi.size(); row++) {
+            modelBaoHanh.setValueAt(hienThiThoiHanBaoHanh(dsBaoHanhHienThi.get(row)), row, 3);
+        }
+    }
+
+    private String hienThiThoiHanBaoHanh(PhuTungBaoHanh baoHanh) {
+        String donVi = switch (baoHanh.donViThoiGian()) {
+            case "NGAY" -> "ngày";
+            case "NAM" -> "năm";
+            default -> "tháng";
+        };
+        String hienThi = baoHanh.thoiHan() + " " + donVi;
+        try {
+            LocalDate ngayLap = LocalDate.parse(txtNgayLap.getText().trim(), DINH_DANG_NGAY);
+            LocalDate ngayHetHan = switch (baoHanh.donViThoiGian()) {
+                case "NGAY" -> ngayLap.plusDays(baoHanh.thoiHan());
+                case "NAM" -> ngayLap.plusYears(baoHanh.thoiHan());
+                default -> ngayLap.plusMonths(baoHanh.thoiHan());
+            };
+            return hienThi + " (đến " + ngayHetHan.format(DINH_DANG_NGAY) + ")";
+        } catch (java.time.format.DateTimeParseException exception) {
+            return hienThi;
+        }
+    }
+
+    private String taoThongTinBaoHanhTooltip(PhuTungBaoHanh baoHanh) {
+        StringBuilder thongTin = new StringBuilder("<html><b>")
+                .append(thoatHtml(baoHanh.tenChinhSach())).append("</b>");
+        if (baoHanh.noiDungBaoHanh() != null && !baoHanh.noiDungBaoHanh().isBlank()) {
+            thongTin.append("<br>Nội dung: ").append(thoatHtml(baoHanh.noiDungBaoHanh()));
+        }
+        if (baoHanh.dieuKienBaoHanh() != null && !baoHanh.dieuKienBaoHanh().isBlank()) {
+            thongTin.append("<br>Điều kiện: ").append(thoatHtml(baoHanh.dieuKienBaoHanh()));
+        }
+        if (baoHanh.truongHopTuChoi() != null && !baoHanh.truongHopTuChoi().isBlank()) {
+            thongTin.append("<br>Từ chối: ").append(thoatHtml(baoHanh.truongHopTuChoi()));
+        }
+        return thongTin.append("</html>").toString();
+    }
+
+    private String thoatHtml(String noiDung) {
+        return noiDung.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 
     // 8. NGHIỆP VỤ
