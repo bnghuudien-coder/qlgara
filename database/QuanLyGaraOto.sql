@@ -14,20 +14,20 @@ GO
 CREATE TABLE KhachHang (
     maKH VARCHAR(20) PRIMARY KEY,
     hoTen NVARCHAR(100) NOT NULL,
-    soDT VARCHAR(15),
+    soDT VARCHAR(15) NOT NULL,
     email VARCHAR(100),
     diaChi NVARCHAR(255),
-    congNo FLOAT DEFAULT 0
+    congNo FLOAT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE Xe (
     maXe VARCHAR(20) PRIMARY KEY,
     bienSo VARCHAR(20) NOT NULL UNIQUE,
-    hangXe NVARCHAR(50),
-    dongXe NVARCHAR(50),
-    namSanXuat INT,
-    soKhung VARCHAR(50),
-    soMay VARCHAR(50),
+    hangXe NVARCHAR(50) NOT NULL,
+    dongXe NVARCHAR(50) NOT NULL,
+    namSanXuat INT NOT NULL,
+    soKhung VARCHAR(50) NOT NULL,
+    soMay VARCHAR(50) NOT NULL,
     maKH VARCHAR(20) NOT NULL,
     CONSTRAINT FK_Xe_KhachHang FOREIGN KEY (maKH) REFERENCES KhachHang(maKH) ON DELETE CASCADE
 );
@@ -35,25 +35,25 @@ CREATE TABLE Xe (
 CREATE TABLE NhanVien (
     maNV VARCHAR(20) PRIMARY KEY,
     hoTen NVARCHAR(100) NOT NULL,
-    chucVu NVARCHAR(50),
-    soDT VARCHAR(15),
+    chucVu NVARCHAR(50) NOT NULL,
+    soDT VARCHAR(15) NOT NULL,
     email VARCHAR(100),
-    trangThai NVARCHAR(20)
+    trangThai NVARCHAR(20) NOT NULL
 );
 
 CREATE TABLE TaiKhoan (
     maNV VARCHAR(20) PRIMARY KEY,
     tenDangNhap VARCHAR(50) NOT NULL UNIQUE,
     matKhau VARCHAR(255) NOT NULL,
-    vaiTro NVARCHAR(50),
-    trangThai NVARCHAR(20),
+    vaiTro NVARCHAR(50) NOT NULL,
+    trangThai NVARCHAR(20) NOT NULL,
     CONSTRAINT FK_TaiKhoan_NhanVien FOREIGN KEY (maNV) REFERENCES NhanVien(maNV) ON DELETE CASCADE
 );
 
 CREATE TABLE CaLamViec (
     maCa VARCHAR(20) PRIMARY KEY,
-    gioBatDau TIME,
-    gioKetThuc TIME
+    gioBatDau TIME NOT NULL,
+    gioKetThuc TIME NOT NULL
 );
 
 CREATE TABLE LichLamViec (
@@ -61,7 +61,7 @@ CREATE TABLE LichLamViec (
     maCa VARCHAR(20) NOT NULL,
     maNV VARCHAR(20) NOT NULL,
     ngayLamViec DATE NOT NULL,
-    trangThai NVARCHAR(20),
+    trangThai NVARCHAR(20) NOT NULL,
     CONSTRAINT FK_LichLamViec_CaLamViec FOREIGN KEY (maCa) REFERENCES CaLamViec(maCa),
     CONSTRAINT FK_LichLamViec_NhanVien FOREIGN KEY (maNV) REFERENCES NhanVien(maNV) 
 );
@@ -69,12 +69,12 @@ CREATE TABLE LichLamViec (
 CREATE TABLE PhuTung (
     maPhuTung VARCHAR(20) PRIMARY KEY,
     tenPhuTung NVARCHAR(100) NOT NULL,
-    donViTinh NVARCHAR(20),
-    giaNhap FLOAT,
-    giaBan FLOAT,
-    soLuongTon INT DEFAULT 0,
+    donViTinh NVARCHAR(20) NOT NULL,
+    giaNhap FLOAT NOT NULL,
+    giaBan FLOAT NOT NULL,
+    soLuongTon INT NOT NULL DEFAULT 0,
     nhaCungCap NVARCHAR(100),
-    trangThai NVARCHAR(20)
+    trangThai NVARCHAR(20) NOT NULL
 );
 
 CREATE TABLE ChinhSachBaoHanh (
@@ -107,7 +107,7 @@ CREATE TABLE DichVu (
     maDV VARCHAR(20) PRIMARY KEY,
     tenDV NVARCHAR(100) NOT NULL,
     moTaDV NVARCHAR(MAX),
-    giaDV FLOAT
+    giaDV FLOAT NOT NULL
 );
 
 CREATE TABLE PhieuTiepNhan (
@@ -116,7 +116,7 @@ CREATE TABLE PhieuTiepNhan (
     maKH VARCHAR(20) NOT NULL,
     maNV VARCHAR(20) NOT NULL,
     ngayLap DATETIME NOT NULL,
-    trangThai NVARCHAR(20),
+    trangThai NVARCHAR(20) NOT NULL,
     ghiChu NVARCHAR(MAX),
     CONSTRAINT FK_PTN_Xe FOREIGN KEY (maXe) REFERENCES Xe(maXe),
     CONSTRAINT FK_PTN_KhachHang FOREIGN KEY (maKH) REFERENCES KhachHang(maKH),
@@ -129,8 +129,8 @@ CREATE TABLE PhieuKiemTra (
     maKH VARCHAR(20) NOT NULL,
     maXe VARCHAR(20) NOT NULL,
     maNV VARCHAR(20) NOT NULL,
-    trangThaiBanDau NVARCHAR(MAX),
-    vanDeHuHong NVARCHAR(MAX),
+    trangThaiBanDau NVARCHAR(MAX) NOT NULL,
+    vanDeHuHong NVARCHAR(MAX) NOT NULL,
     CONSTRAINT FK_PKT_PhieuTiepNhan FOREIGN KEY (maPhieuTiepNhan) REFERENCES PhieuTiepNhan(maPhieuTiepNhan),
     CONSTRAINT FK_PKT_KH FOREIGN KEY (maKH) REFERENCES KhachHang(maKH),
     CONSTRAINT FK_PKT_Xe FOREIGN KEY (maXe) REFERENCES Xe(maXe),
@@ -139,12 +139,12 @@ CREATE TABLE PhieuKiemTra (
 
 CREATE TABLE PhieuSuaChua (
     maPhieuSuaChua VARCHAR(20) PRIMARY KEY,
-    maPhieuKiemTra VARCHAR(20),
+    maPhieuKiemTra VARCHAR(20) NOT NULL,
     maXe VARCHAR(20) NOT NULL,
     maKH VARCHAR(20) NOT NULL,
     maNV VARCHAR(20) NOT NULL,
-    ngayBatDau DATETIME,
-    ngayHoanThanhDuKien DATETIME,
+    ngayBatDau DATETIME NOT NULL,
+    ngayHoanThanhDuKien DATETIME NOT NULL,
     trangThai NVARCHAR(20) NOT NULL CONSTRAINT DF_PSC_trangThai DEFAULT N'Chờ sửa chữa',
     CONSTRAINT FK_PSC_PKT FOREIGN KEY (maPhieuKiemTra) REFERENCES PhieuKiemTra(maPhieuKiemTra),
     CONSTRAINT FK_PSC_Xe FOREIGN KEY (maXe) REFERENCES Xe(maXe),
@@ -171,11 +171,11 @@ CREATE TABLE ChiTietPhieuSuaChua (
 CREATE TABLE ChuongTrinhKhuyenMai (
     maKM VARCHAR(20) PRIMARY KEY,
     tenKM NVARCHAR(100) NOT NULL,
-    tileGiam FLOAT,
-    ngayBatDau DATE,
-    ngayKetThuc DATE,
+    tileGiam FLOAT NOT NULL,
+    ngayBatDau DATE NOT NULL,
+    ngayKetThuc DATE NOT NULL,
     dieuKienApDung NVARCHAR(MAX),
-    trangThai NVARCHAR(20)
+    trangThai NVARCHAR(20) NOT NULL
 );
 
 CREATE TABLE HoaDon (
@@ -187,7 +187,7 @@ CREATE TABLE HoaDon (
     tienGiamGia DECIMAL(18,2) NOT NULL DEFAULT 0,
     thueVAT DECIMAL(18,2) NOT NULL DEFAULT 0,
     soTien DECIMAL(18,2) NOT NULL DEFAULT 0,
-    trangThai NVARCHAR(20),
+    trangThai NVARCHAR(20) NOT NULL,
     CONSTRAINT FK_HD_PhieuSuaChua FOREIGN KEY (maPhieuSuaChua) REFERENCES PhieuSuaChua(maPhieuSuaChua),
     CONSTRAINT FK_HD_NhanVien FOREIGN KEY (maNV) REFERENCES NhanVien(maNV),
     CONSTRAINT FK_HD_ChuongTrinhKM FOREIGN KEY (maKM) REFERENCES ChuongTrinhKhuyenMai(maKM)
@@ -201,7 +201,10 @@ CREATE TABLE ChiTietHoaDon (
     maDV VARCHAR(20) NULL,
     soLuong INT NOT NULL DEFAULT 1,
     donGia DECIMAL(18,2) NOT NULL DEFAULT 0,
-    CONSTRAINT CK_CTHD_ItNhatMotLoai CHECK (maPhuTung IS NOT NULL OR maDV IS NOT NULL),
+    CONSTRAINT CK_CTHD_MotLoai CHECK (
+        (maPhuTung IS NOT NULL AND maDV IS NULL)
+        OR (maPhuTung IS NULL AND maDV IS NOT NULL)
+    ),
     CONSTRAINT FK_CTHD_HoaDon FOREIGN KEY (maHoaDon) REFERENCES HoaDon(maHoaDon) ON DELETE CASCADE,
     CONSTRAINT FK_CTHD_PhieuSuaChua FOREIGN KEY (maPhieuSuaChua) REFERENCES PhieuSuaChua(maPhieuSuaChua),
     CONSTRAINT FK_CTHD_PhuTung FOREIGN KEY (maPhuTung) REFERENCES PhuTung(maPhuTung),
@@ -215,7 +218,7 @@ CREATE TABLE PhieuYeuCauBaoHanh (
     soLuong INT NOT NULL,
     ngayTiepNhan DATETIME2 NOT NULL CONSTRAINT DF_PYCBH_ngayTiepNhan DEFAULT SYSDATETIME(),
     trangThai NVARCHAR(30) NOT NULL CONSTRAINT DF_PYCBH_trangThai DEFAULT N'Chờ xử lý',
-    lyDo NVARCHAR(1000),
+    lyDo NVARCHAR(1000) NOT NULL,
     ghiChuXuLy NVARCHAR(1000),
     ngayXuLy DATETIME2,
     ngayHoanThanh DATETIME2,
@@ -234,9 +237,9 @@ CREATE INDEX IX_PYCBH_trangThai_ngayTiepNhan
 CREATE TABLE GiaoDichThanhToan (
     maGD VARCHAR(20) PRIMARY KEY,
     maHoaDon VARCHAR(20) NOT NULL,
-    phuongThucThanhToan NVARCHAR(50),
-    thoiGianGD DATETIME DEFAULT GETDATE(),
-    trangThaiGD NVARCHAR(20),
+    phuongThucThanhToan NVARCHAR(50) NOT NULL,
+    thoiGianGD DATETIME NOT NULL CONSTRAINT DF_GDTT_thoiGian DEFAULT GETDATE(),
+    trangThaiGD NVARCHAR(20) NOT NULL,
     soTienThanhToan DECIMAL(18,2) NOT NULL DEFAULT 0,
     CONSTRAINT FK_GDTT_HoaDon FOREIGN KEY (maHoaDon) REFERENCES HoaDon(maHoaDon)
 );
@@ -246,8 +249,8 @@ CREATE TABLE PhieuBaoHanh (
     maNV VARCHAR(20) NOT NULL,
     maKH VARCHAR(20) NOT NULL,
     maXe VARCHAR(20) NOT NULL,
-    ngayHetHanBaoHanh DATE,
-    noiDungBaoHanh NVARCHAR(MAX),
+    ngayHetHanBaoHanh DATE NOT NULL,
+    noiDungBaoHanh NVARCHAR(MAX) NOT NULL,
     dieuKienBaoHanh NVARCHAR(MAX),
     CONSTRAINT FK_PBH_NhanVien FOREIGN KEY (maNV) REFERENCES NhanVien(maNV),
     CONSTRAINT FK_PBH_KhachHang FOREIGN KEY (maKH) REFERENCES KhachHang(maKH),
@@ -271,24 +274,24 @@ CREATE TABLE PhieuBanGiao (
 CREATE TABLE PhieuDoiTra (
     maPhieuDoiTra VARCHAR(20) PRIMARY KEY,
     maHoaDon VARCHAR(20) NOT NULL,
-    lyDoDoiTra NVARCHAR(MAX),
-    hinhThucXuLy NVARCHAR(50),
+    lyDoDoiTra NVARCHAR(MAX) NOT NULL,
+    hinhThucXuLy NVARCHAR(50) NOT NULL,
     CONSTRAINT FK_PDT_HoaDon FOREIGN KEY (maHoaDon) REFERENCES HoaDon(maHoaDon)
 );
 
 CREATE TABLE PhieuNhapXuatKho (
     maPhieuNhapXuat VARCHAR(20) PRIMARY KEY,
     maNV VARCHAR(20) NOT NULL,
-    ngayLapPhieu DATETIME,
-    kieuPhieu NVARCHAR(20),
+    ngayLapPhieu DATETIME NOT NULL,
+    kieuPhieu NVARCHAR(20) NOT NULL,
     CONSTRAINT FK_PNXK_NhanVien FOREIGN KEY (maNV) REFERENCES NhanVien(maNV)
 );
 
 CREATE TABLE ChiTietPhieuNhap (
     maPhieuNhapXuat VARCHAR(20) NOT NULL,
     maPhuTung VARCHAR(20) NOT NULL,
-    soLuong INT,
-    donGia FLOAT,
+    soLuong INT NOT NULL,
+    donGia FLOAT NOT NULL,
     ghiChu NVARCHAR(MAX),
     PRIMARY KEY (maPhieuNhapXuat, maPhuTung),
     CONSTRAINT FK_CTPN_PhieuNhapXuat FOREIGN KEY (maPhieuNhapXuat) REFERENCES PhieuNhapXuatKho(maPhieuNhapXuat) ON DELETE CASCADE,

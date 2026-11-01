@@ -91,7 +91,7 @@ public class FrmKhachHang extends JPanel implements ActionListener {
         JPanel pnlFields = FormUI.createFieldsPanel();
         FormUI.addField(pnlFields, "Mã khách hàng *", txtMaKH, 0, 0);
         FormUI.addField(pnlFields, "Họ và tên *", txtHoTen, 2, 0);
-        FormUI.addField(pnlFields, "Số điện thoại", txtSoDienThoai, 4, 0);
+        FormUI.addField(pnlFields, "Số điện thoại *", txtSoDienThoai, 4, 0);
         FormUI.addField(pnlFields, "Email", txtEmail, 0, 1);
         FormUI.addField(pnlFields, "Địa chỉ", txtDiaChi, 2, 1);
         FormUI.addField(pnlFields, "Công nợ", txtCongNo, 4, 1);
@@ -188,6 +188,11 @@ public class FrmKhachHang extends JPanel implements ActionListener {
         if (!FormValidator.isWithinMaxLength(txtHoTen.getText().trim(), 100)) {
             FormUI.showError("Họ và tên không được vượt quá 100 ký tự.");
             txtHoTen.requestFocus();
+            return false;
+        }
+        if (txtSoDienThoai.getText().trim().isEmpty()) {
+            FormUI.showError("Số điện thoại không được để trống.");
+            txtSoDienThoai.requestFocus();
             return false;
         }
         if (!FormValidator.isValidOptionalPhoneNumber(txtSoDienThoai.getText().trim())) {

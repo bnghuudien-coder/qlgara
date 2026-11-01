@@ -279,16 +279,16 @@ public class FrmPhieuSuaChua extends JPanel {
         addField(pnlField, "Mã xe", txtMaXe, 0, 2);
         addField(pnlField, "Mã khách hàng", txtMaKhachHang, 0, 3);
         addField(pnlField, "Mã nhân viên", txtMaNhanVien, 0, 4);
-        addField(pnlField, "Ngày bắt đầu", txtNgayBatDau, 0, 5);
-        addField(pnlField, "Ngày hoàn thành dự kiến", txtNgayHoanThanhDuKien, 0, 6);
+        addField(pnlField, "Ngày bắt đầu *", txtNgayBatDau, 0, 5);
+        addField(pnlField, "Ngày hoàn thành dự kiến *", txtNgayHoanThanhDuKien, 0, 6);
         addField(pnlField, "Trạng thái", cboTrangThai, 0, 7);
         addField(pnlField, "Mã phiếu sửa chữa (tự động)", txtMaPhieuSuaChua, 0, 0);
         addField(pnlField, "Mã phiếu kiểm tra", cboPhieuKiemTra, 2, 0);
         addField(pnlField, "Mã xe", txtMaXe, 0, 1);
         addField(pnlField, "Mã khách hàng", txtMaKhachHang, 2, 1);
         addField(pnlField, "Mã nhân viên", txtMaNhanVien, 0, 2);
-        addField(pnlField, "Ngày bắt đầu", txtNgayBatDau, 2, 2);
-        addField(pnlField, "Ngày hoàn thành dự kiến", txtNgayHoanThanhDuKien, 0, 3);
+        addField(pnlField, "Ngày bắt đầu *", txtNgayBatDau, 2, 2);
+        addField(pnlField, "Ngày hoàn thành dự kiến *", txtNgayHoanThanhDuKien, 0, 3);
         addField(pnlField, "Trạng thái", cboTrangThai, 2, 3);
 
         txtMaXe.setEditable(false);
@@ -700,14 +700,23 @@ public class FrmPhieuSuaChua extends JPanel {
         if (maNV == null || maNV.isEmpty())
             throw new IllegalArgumentException("Mã nhân viên không được để trống");
 
+        Timestamp ngayBatDau = docTimestamp(txtNgayBatDau.getText());
+        Timestamp ngayHoanThanhDuKien = docTimestamp(txtNgayHoanThanhDuKien.getText());
+        if (ngayBatDau == null) {
+            throw new IllegalArgumentException("Ngày bắt đầu không được để trống hoặc sai định dạng");
+        }
+        if (ngayHoanThanhDuKien == null) {
+            throw new IllegalArgumentException("Ngày hoàn thành dự kiến không được để trống hoặc sai định dạng");
+        }
+
         PhieuSuaChua phieu = new PhieuSuaChua();
         phieu.setMaPhieuSuaChua(maPSC);
         phieu.setMaPhieuKiemTra(maPKT);
         phieu.setMaXe(maXe);
         phieu.setMaKH(maKH);
         phieu.setMaNV(maNV);
-        phieu.setNgayBatDau(docTimestamp(txtNgayBatDau.getText()));
-        phieu.setNgayHoanThanhDuKien(docTimestamp(txtNgayHoanThanhDuKien.getText()));
+        phieu.setNgayBatDau(ngayBatDau);
+        phieu.setNgayHoanThanhDuKien(ngayHoanThanhDuKien);
         phieu.setTrangThai(cboTrangThai.getSelectedItem() == null
                 ? "Chờ xử lý"
                 : cboTrangThai.getSelectedItem().toString());

@@ -447,6 +447,9 @@ public class PhieuYeuCauBaoHanhDAO {
         if (yeuCau.getSoLuong() <= 0) {
             throw new SQLException("Số lượng yêu cầu phải lớn hơn 0.");
         }
+        if (yeuCau.getLyDo() == null || yeuCau.getLyDo().isBlank()) {
+            throw new SQLException("Lý do yêu cầu bảo hành không được để trống.");
+        }
         if (yeuCau.getLyDo() != null && yeuCau.getLyDo().length() > 1000) {
             throw new SQLException("Lý do không được vượt quá 1000 ký tự.");
         }

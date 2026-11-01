@@ -112,7 +112,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         FormUI.addField(pnlTruong, "Hóa đơn *", cboHoaDon, 2, 0);
         FormUI.addField(pnlTruong, "Phụ tùng *", cboPhuTung, 0, 1);
         FormUI.addField(pnlTruong, "Số lượng *", spnSoLuong, 2, 1);
-        FormUI.addField(pnlTruong, "Lý do yêu cầu", new AppScrollPane(txaLyDo), 0, 2);
+        FormUI.addField(pnlTruong, "Lý do yêu cầu *", new AppScrollPane(txaLyDo), 0, 2);
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 2;
@@ -295,6 +295,11 @@ public class FrmTiepNhanBaoHanh extends JPanel {
             thongBao("Vui lòng chọn hóa đơn và phụ tùng còn hạn bảo hành.", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        if (txaLyDo.getText().isBlank()) {
+            thongBao("Vui lòng nhập lý do yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
+            txaLyDo.requestFocusInWindow();
+            return;
+        }
         PhieuYeuCauBaoHanh yeuCau = taoYeuCau();
         yeuCau.setMaHoaDon(hoaDon.maHoaDon());
         yeuCau.setMaPhuTung(phuTung.maPhuTung());
@@ -317,6 +322,11 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         }
         if (!PhieuYeuCauBaoHanhDAO.CHO_XU_LY.equals(yeuCauDangChon.trangThai())) {
             thongBao("Chỉ có thể cập nhật yêu cầu đang chờ xử lý.", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (txaLyDo.getText().isBlank()) {
+            thongBao("Vui lòng nhập lý do yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
+            txaLyDo.requestFocusInWindow();
             return;
         }
         PhieuYeuCauBaoHanh yeuCau = taoYeuCau();

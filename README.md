@@ -14,3 +14,5 @@ Hai script trên đã bao gồm bảng chính sách bảo hành, bảng phụ t�
 Nếu database `a1` đã có schema cũ, không chạy lại file tạo database. Chạy `database/Migration_ChiTietHoaDon.sql` một lần để cập nhật cấu trúc chi tiết phiếu sửa chữa và hóa đơn.
 
 Các bảng chính sách bảo hành và phiếu yêu cầu bảo hành chỉ được tạo trong script khởi tạo database mới; nếu đang dùng database cũ, hãy tạo lại database và nạp lại dữ liệu mẫu để sử dụng đầy đủ các chức năng này.
+
+Các ràng buộc `NOT NULL` mới cũng chỉ áp dụng khi khởi tạo schema mới. Hãy tạo lại database `a1`, sau đó chạy lại `QuanLyGaraOto.sql` và `DuLieuMau.sql` theo đúng thứ tự; không chạy script tạo schema trên database đã có bảng.

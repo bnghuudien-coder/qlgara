@@ -137,12 +137,12 @@ public class FrmXe extends JPanel {
         pnlFields.setOpaque(false);
         addField(pnlFields, "Mã xe (tự động)", txtMaXe, 0, 0);
         addField(pnlFields, "Biển số *", txtBienSo, 2, 0);
-        addField(pnlFields, "Hãng xe", txtHangXe, 0, 1);
-        addField(pnlFields, "Dòng xe", txtDongXe, 2, 1);
-        addField(pnlFields, "Năm sản xuất", txtNamSanXuat, 0, 2);
+        addField(pnlFields, "Hãng xe *", txtHangXe, 0, 1);
+        addField(pnlFields, "Dòng xe *", txtDongXe, 2, 1);
+        addField(pnlFields, "Năm sản xuất *", txtNamSanXuat, 0, 2);
         addField(pnlFields, "Khách hàng *", txtKhachHang, 2, 2);
-        addField(pnlFields, "Số khung", txtSoKhung, 0, 3);
-        addField(pnlFields, "Số máy", txtSoMay, 2, 3);
+        addField(pnlFields, "Số khung *", txtSoKhung, 0, 3);
+        addField(pnlFields, "Số máy *", txtSoMay, 2, 3);
 
         JPanel pnlButtons = new JPanel(new GridBagLayout());
         pnlButtons.setOpaque(false);
@@ -497,6 +497,16 @@ public class FrmXe extends JPanel {
             throw new IllegalArgumentException(
                     "Biển số xe không đúng định dạng (ví dụ: 30A-123.45 hoặc 30A-12345).");
         }
+        String hangXe = txtHangXe.getText().trim();
+        String dongXe = txtDongXe.getText().trim();
+        String namSanXuatText = txtNamSanXuat.getText().trim();
+        String soKhung = txtSoKhung.getText().trim();
+        String soMay = txtSoMay.getText().trim();
+        if (hangXe.isEmpty() || dongXe.isEmpty() || namSanXuatText.isEmpty()
+                || soKhung.isEmpty() || soMay.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Hãng xe, dòng xe, năm sản xuất, số khung và số máy không được để trống.");
+        }
         if (!FormValidator.isWithinMaxLength(txtHangXe.getText().trim(), 50)
                 || !FormValidator.isWithinMaxLength(txtDongXe.getText().trim(), 50)) {
             throw new IllegalArgumentException("Hãng xe và dòng xe không được vượt quá 50 ký tự.");
@@ -509,23 +519,19 @@ public class FrmXe extends JPanel {
             throw new IllegalArgumentException("Hãy tìm và chọn khách hàng từ danh sách gợi ý.");
         }
 
-        Integer namSanXuat = null;
-        String namSanXuatText = txtNamSanXuat.getText().trim();
-        if (!namSanXuatText.isEmpty()) {
-            if (!FormValidator.isValidOptionalProductionYear(namSanXuatText)) {
-                throw new IllegalArgumentException(
-                        "Năm sản xuất phải là số từ 1886 đến " + java.time.Year.now().getValue() + ".");
-            }
-            namSanXuat = Integer.valueOf(namSanXuatText);
+        if (!FormValidator.isValidOptionalProductionYear(namSanXuatText)) {
+            throw new IllegalArgumentException(
+                    "Năm sản xuất phải là số từ 1886 đến " + java.time.Year.now().getValue() + ".");
         }
+        Integer namSanXuat = Integer.valueOf(namSanXuatText);
         return new Xe(
                 maXe,
                 bienSo,
-                giaTriRongLaNull(txtHangXe.getText()),
-                giaTriRongLaNull(txtDongXe.getText()),
+                hangXe,
+                dongXe,
                 namSanXuat,
-                giaTriRongLaNull(txtSoKhung.getText()),
-                giaTriRongLaNull(txtSoMay.getText()),
+                soKhung,
+                soMay,
                 khachHangDuocChon.getMaKH());
     }
 
@@ -623,11 +629,6 @@ public class FrmXe extends JPanel {
                 .replace('đ', 'd')
                 .replace('Đ', 'D')
                 .toLowerCase(Locale.ROOT);
-    }
-
-    private String giaTriRongLaNull(String value) {
-        String trimmedValue = value.trim();
-        return trimmedValue.isEmpty() ? null : trimmedValue;
     }
 
     private void hienThiXeDaChon() {
