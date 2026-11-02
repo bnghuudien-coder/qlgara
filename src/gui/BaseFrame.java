@@ -75,6 +75,11 @@ public class BaseFrame extends JFrame {
 			hienThiDangNhap();
 			return;
 		}
+		if ("Quản lý tài khoản".equals(featureName) || "Phân quyền nhân viên".equals(featureName)) {
+			setContent(new FrmQuanLyTaiKhoan());
+			lblStatus.setText("Quản lý tài khoản");
+			return;
+		}
 		if ("Nhân viên".equals(featureName) || "Cập nhật nhân viên".equals(featureName)) {
 			setContent(new FrmNhanVien());
 			lblStatus.setText("Quản lý nhân viên");

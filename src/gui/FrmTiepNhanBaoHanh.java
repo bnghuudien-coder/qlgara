@@ -10,9 +10,9 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,6 +35,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     private final AppTextField txtMaPhieuYCBH = new AppTextField(14);
     private final JComboBox<LuaChonHoaDon> cboHoaDon = new JComboBox<>();
     private final JComboBox<LuaChonPhuTung> cboPhuTung = new JComboBox<>();
+    private final AppTextField txtKetQuaBaoHanh = new AppTextField(20);
     private final JSpinner spnSoLuong = new JSpinner(new SpinnerNumberModel(1, 1, 10000, 1));
     private final JTextArea txaLyDo = taoOThongTin();
     private final JTextArea txaGhiChuXuLy = taoOThongTin();
@@ -43,6 +44,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     private final List<YeuCauHienThi> dsYeuCau = new ArrayList<>();
     private boolean dangNapHoaDon;
     private boolean dangTaoMoi = true;
+    private boolean baoHanhConHan;
     private final AppButton btnThem = new AppButton("Tiếp nhận");
     private final AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
     private final AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
@@ -65,6 +67,8 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         setLayout(new BorderLayout());
         setOpaque(false);
         txtMaPhieuYCBH.setEditable(false);
+        txtKetQuaBaoHanh.setEditable(false);
+        txtKetQuaBaoHanh.setToolTipText("Kết quả tính theo ngày lập hóa đơn và thời hạn bảo hành");
         taiMaYeuCauMoi();
         tblYeuCau.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tblYeuCau.setAutoCreateRowSorter(false);
@@ -113,15 +117,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         FormUI.addField(pnlTruong, "Phụ tùng *", cboPhuTung, 0, 1);
         FormUI.addField(pnlTruong, "Số lượng *", spnSoLuong, 2, 1);
         FormUI.addField(pnlTruong, "Lý do yêu cầu *", new AppScrollPane(txaLyDo), 0, 2);
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 2;
-        gbc.weightx = 1;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.anchor = GridBagConstraints.NORTHWEST;
-        gbc.insets = new Insets(5, 0, 5, 18);
-        JLabel lblGhiChu = new AppLabel("Chỉ nhận phụ tùng còn thời hạn bảo hành.", AppLabel.Style.MUTED);
-        pnlTruong.add(lblGhiChu, gbc);
+        FormUI.addField(pnlTruong, "Kết quả bảo hành", txtKetQuaBaoHanh, 2, 2);
 
         JPanel pnlNoiDung = new JPanel(new BorderLayout(0, 10));
         pnlNoiDung.setOpaque(false);
@@ -182,11 +178,11 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         cboHoaDon.removeAllItems();
         cboPhuTung.removeAllItems();
         try {
-            for (LuaChonHoaDon hoaDon : phieuYeuCauBaoHanhDAO.layHoaDonConHanBaoHanh()) {
+            for (LuaChonHoaDon hoaDon : phieuYeuCauBaoHanhDAO.layHoaDonCoBaoHanh()) {
                 cboHoaDon.addItem(hoaDon);
             }
         } catch (SQLException exception) {
-            baoLoi("Không thể tải hóa đơn còn hạn bảo hành", exception);
+            baoLoi("Không thể tải hóa đơn có phụ tùng được bảo hành", exception);
         } finally {
             dangNapHoaDon = false;
         }
@@ -197,11 +193,12 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         cboPhuTung.removeAllItems();
         LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
         if (hoaDon == null) {
+            capNhatGioiHanSoLuong();
             return;
         }
         try {
             for (LuaChonPhuTung phuTung : phieuYeuCauBaoHanhDAO
-                    .layPhuTungConHanTheoHoaDon(hoaDon.maHoaDon())) {
+                    .layPhuTungTheoHoaDon(hoaDon.maHoaDon())) {
                 cboPhuTung.addItem(phuTung);
             }
             capNhatGioiHanSoLuong();
@@ -214,6 +211,34 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
         int gioiHan = phuTung == null ? 1 : Math.max(1, phuTung.soLuongHoaDon());
         spnSoLuong.setModel(new SpinnerNumberModel(1, 1, gioiHan, 1));
+        capNhatKetQuaBaoHanh();
+    }
+
+    private void capNhatKetQuaBaoHanh() {
+        LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
+        LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
+        baoHanhConHan = false;
+
+        if (hoaDon == null || phuTung == null) {
+            txtKetQuaBaoHanh.setText("Chọn hóa đơn và phụ tùng");
+            txtKetQuaBaoHanh.setForeground(UIConfig.COLOR_MUTED);
+        } else if (hoaDon.ngayLap() == null || phuTung.thoiHanBaoHanh() <= 0) {
+            txtKetQuaBaoHanh.setText("Không có dữ liệu thời hạn bảo hành");
+            txtKetQuaBaoHanh.setForeground(UIConfig.COLOR_DANGER);
+        } else {
+            LocalDate ngayHetHan = hoaDon.ngayLap().toLocalDateTime().toLocalDate();
+            ngayHetHan = switch (phuTung.donViThoiGian()) {
+                case "NGAY" -> ngayHetHan.plusDays(phuTung.thoiHanBaoHanh());
+                case "NAM" -> ngayHetHan.plusYears(phuTung.thoiHanBaoHanh());
+                default -> ngayHetHan.plusMonths(phuTung.thoiHanBaoHanh());
+            };
+            baoHanhConHan = !LocalDate.now().isAfter(ngayHetHan);
+            txtKetQuaBaoHanh.setText((baoHanhConHan ? "Còn hạn đến " : "Đã hết hạn từ ")
+                    + ngayHetHan.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+            txtKetQuaBaoHanh.setForeground(
+                    baoHanhConHan ? UIConfig.COLOR_SUCCESS : UIConfig.COLOR_DANGER);
+        }
+        btnThem.setEnabled(dangTaoMoi && baoHanhConHan);
     }
 
     private void taiDanhSachYeuCau() {
@@ -293,6 +318,11 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
         if (hoaDon == null || phuTung == null) {
             thongBao("Vui lòng chọn hóa đơn và phụ tùng còn hạn bảo hành.", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (!baoHanhConHan) {
+            thongBao("Phụ tùng đã hết hạn hoặc không xác định được thời hạn bảo hành nên không thể lập phiếu.",
+                    JOptionPane.WARNING_MESSAGE);
             return;
         }
         if (txaLyDo.getText().isBlank()) {
@@ -478,7 +508,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     }
 
     private void capNhatTrangThaiNut(boolean choXuLy, boolean daChapNhan) {
-        btnThem.setEnabled(dangTaoMoi);
+        btnThem.setEnabled(dangTaoMoi && baoHanhConHan);
         btnCapNhat.setEnabled(choXuLy);
         btnXoa.setEnabled(choXuLy);
         btnChapNhan.setEnabled(choXuLy);

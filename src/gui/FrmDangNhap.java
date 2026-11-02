@@ -36,6 +36,8 @@ public class FrmDangNhap extends JPanel {
 	private final JCheckBox chkHienMatKhau = new JCheckBox("Hiển thị mật khẩu");
 	public static TaiKhoan taiKhoanDangNhap;
 
+
+	//Xây dựng giao diện Đăng nhập
 	public FrmDangNhap(BaseFrame frame) {
 		this.frame = frame;
 		setLayout(new GridBagLayout());
@@ -197,9 +199,9 @@ public class FrmDangNhap extends JPanel {
 	}
 
 	private boolean taiKhoanDangHoatDong(String trangThai) {
-		// Giá trị null hoặc chuỗi rỗng được coi là không ràng buộc (mặc định cho phép)
+		// Giá trị null hoặc chuỗi rỗng được coi là không hoạt động
 		if (trangThai == null || trangThai.isBlank()) {
-			return true;
+			return false;
 		}
 		// Chuẩn hoá Unicode và loại bỏ dấu, sau đó loại bỏ mọi ký tự không phải chữ/ số
 		String trangThaiChuanHoa = chuanHoa(trangThai)
@@ -212,13 +214,6 @@ public class FrmDangNhap extends JPanel {
 				|| trangThaiChuanHoa.equals("active") || trangThaiChuanHoa.equals("1")) {
 			return true;
 		}
-
-		// // Nếu chuỗi chứa cả 'hoat' và 'dong' ở bất kỳ vị trí nào thì vẫn coi là hoạt
-		// động
-		// if (trangThaiChuanHoa.contains("hoat") && trangThaiChuanHoa.contains("dong"))
-		// {
-		// return true;
-		// }
 
 		return false;
 	}
@@ -234,7 +229,4 @@ public class FrmDangNhap extends JPanel {
 				.trim();
 	}
 
-	// public TaiKhoan taiKhoanDangNhapHienTai(){
-	// ;
-	// }
 }

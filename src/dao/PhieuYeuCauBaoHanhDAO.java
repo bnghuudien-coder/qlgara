@@ -116,7 +116,7 @@ public class PhieuYeuCauBaoHanhDAO {
         return dsYeuCau;
     }
 
-    public List<LuaChonHoaDon> layHoaDonConHanBaoHanh() throws SQLException {
+    public List<LuaChonHoaDon> layHoaDonCoBaoHanh() throws SQLException {
         String sql = """
                 SELECT DISTINCT hd.maHoaDon, kh.hoTen, hd.ngayLap
                 FROM HoaDon hd
@@ -128,12 +128,6 @@ public class PhieuYeuCauBaoHanhDAO {
                     JOIN ChinhSachBaoHanh_PhuTung csp ON csp.maPhuTung = cthd.maPhuTung
                     JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH AND cs.trangThai = 1
                     WHERE cthd.maHoaDon = hd.maHoaDon
-                      AND CAST(GETDATE() AS DATE) <= CAST(
-                          CASE cs.donViThoiGian
-                              WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                              WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                              ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                          END AS DATE)
                 )
                 ORDER BY hd.ngayLap DESC, hd.maHoaDon DESC
                 """;
@@ -148,7 +142,7 @@ public class PhieuYeuCauBaoHanhDAO {
         return dsHoaDon;
     }
 
-    public List<LuaChonPhuTung> layPhuTungConHanTheoHoaDon(String maHoaDon) throws SQLException {
+    public List<LuaChonPhuTung> layPhuTungTheoHoaDon(String maHoaDon) throws SQLException {
         String sql = """
                 SELECT cthd.maPhuTung, pt.tenPhuTung, SUM(cthd.soLuong) AS soLuongHoaDon,
                        cs.thoiHanBaoHanh, cs.donViThoiGian
@@ -160,12 +154,6 @@ public class PhieuYeuCauBaoHanhDAO {
                     FROM ChinhSachBaoHanh_PhuTung csp
                     JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH
                     WHERE csp.maPhuTung = cthd.maPhuTung AND cs.trangThai = 1
-                      AND CAST(GETDATE() AS DATE) <= CAST(
-                          CASE cs.donViThoiGian
-                              WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                              WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                              ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                          END AS DATE)
                     ORDER BY cs.ngayTao DESC, cs.maCSBH DESC
                 ) cs
                 WHERE cthd.maHoaDon = ?
@@ -343,19 +331,20 @@ public class PhieuYeuCauBaoHanhDAO {
                   SELECT SUM(cthd.soLuong) AS soLuongHoaDon
                   FROM ChiTietHoaDon cthd
                   JOIN HoaDon hd ON hd.maHoaDon = cthd.maHoaDon
+                  CROSS APPLY (
+                      SELECT TOP (1) cs.thoiHanBaoHanh, cs.donViThoiGian
+                      FROM ChinhSachBaoHanh_PhuTung csp
+                      JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH
+                      WHERE csp.maPhuTung = cthd.maPhuTung AND cs.trangThai = 1
+                      ORDER BY cs.ngayTao DESC, cs.maCSBH DESC
+                  ) cs
                   WHERE cthd.maHoaDon = ? AND cthd.maPhuTung = ?
-                    AND EXISTS (
-                        SELECT 1
-                        FROM ChinhSachBaoHanh_PhuTung csp
-                        JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH AND cs.trangThai = 1
-                        WHERE csp.maPhuTung = cthd.maPhuTung
-                          AND CAST(GETDATE() AS DATE) <= CAST(
-                              CASE cs.donViThoiGian
-                                  WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                                  WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                                  ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                              END AS DATE)
-                    )
+                    AND CAST(GETDATE() AS DATE) <= CAST(
+                        CASE cs.donViThoiGian
+                            WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
+                            WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
+                            ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
+                        END AS DATE)
                   GROUP BY cthd.maHoaDon, cthd.maPhuTung
                   """
                 : """
