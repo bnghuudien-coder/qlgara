@@ -22,7 +22,7 @@ public class MenuQL extends JMenuBar {
 		JMenu mnuSearch = MenuBarSupport.createMenu("Tìm kiếm", MenuIcon.Type.SEARCH);
 		JMenu mnuReports = MenuBarSupport.createMenu("Báo biểu", MenuIcon.Type.CHART);
 
-		themItem(mnuSystem, "Quản lý tài khoản", "Phân quyền", "Sao lưu dữ liệu",
+		themItem(mnuSystem, "Trang Chủ", "Quản lý tài khoản", "Phân quyền", "Sao lưu dữ liệu",
 				"Đổi mật khẩu", "Đăng xuất");
 		themItem(mnuCatalog, "Khách hàng", "Xe", "Nhân viên", "Phụ tùng",
 				"Dịch vụ sửa chữa", "Khuyến mãi", "Ca làm việc", "Chính sách bảo hành");

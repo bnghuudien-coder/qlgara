@@ -1,16 +1,28 @@
 package gui;
 
+import dao.ThongKeHoatDongGaraDAO;
 import entity.TaiKhoan;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.sql.SQLException;
+import java.text.Normalizer;
+import java.util.Locale;
+import java.util.concurrent.ExecutionException;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenuBar;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
+import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
 
 public class BaseFrame extends JFrame {
@@ -19,6 +31,7 @@ public class BaseFrame extends JFrame {
 	private final JLabel lblStatus = new JLabel("Sẵn sàng");
 	private JPanel pnlCurrentContent;
 	private TaiKhoan taiKhoanDangNhap;
+	private JMenuBar menuVaiTroDangNhap;
 
 	public void setTaiKhoanDangNhap(TaiKhoan taiKhoan) {
 		this.taiKhoanDangNhap = taiKhoan;
@@ -46,6 +59,18 @@ public class BaseFrame extends JFrame {
 	}
 
 	protected void onMenuAction(String featureName) {
+		if ("Trang Chủ".equals(featureName)) {
+			if (menuVaiTroDangNhap == null) {
+				FormUI.showError("Không xác định được menu theo vai trò đăng nhập.");
+				return;
+			}
+			setJMenuBar(menuVaiTroDangNhap);
+			setContent(createWorkspace());
+			lblStatus.setText(laNhanVienDangNhap()
+					? "Trang chủ nhân viên"
+					: "Trang chủ quản lý");
+			return;
+		}
 		if ("Đăng xuất".equals(featureName)) {
 			hienThiDangNhap();
 			return;
@@ -161,12 +186,14 @@ public class BaseFrame extends JFrame {
 	}
 
 	void hienThiMenu(JMenuBar menuBar, String status) {
+		menuVaiTroDangNhap = menuBar;
 		setJMenuBar(menuBar);
 		setContent(createWorkspace());
 		lblStatus.setText(status);
 	}
 
 	private void hienThiDangNhap() {
+		menuVaiTroDangNhap = null;
 		setJMenuBar(MainMenu.create(this));
 		setContent(new FrmDangNhap(this));
 		lblStatus.setText("Đã đăng xuất");
@@ -187,7 +214,9 @@ public class BaseFrame extends JFrame {
 		pnlWorkspace.setBackground(PALE_BLUE);
 		pnlWorkspace.setBorder(new EmptyBorder(38, 48, 38, 48));
 
-		JLabel lblTitle = new JLabel("Quản Lý Gara Oto");
+		JLabel lblTitle = new JLabel(laNhanVienDangNhap()
+				? "Trang chủ nhân viên"
+				: laQuanLyDangNhap() ? "Trang chủ quản lý" : "Quản Lý Gara Oto");
 		lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 28));
 		lblTitle.setForeground(new Color(32, 55, 92));
 		JLabel lblSubtitle = new JLabel("Hệ thống quản lý hoạt động gara ô tô");
@@ -204,14 +233,227 @@ public class BaseFrame extends JFrame {
 		pnlContent.setBorder(BorderFactory.createCompoundBorder(
 				BorderFactory.createLineBorder(new Color(221, 231, 245)),
 				new EmptyBorder(26, 28, 26, 28)));
-		JLabel lblPrompt = new JLabel("Chọn chức năng trên thanh menu để bắt đầu", SwingConstants.CENTER);
-		lblPrompt.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-		lblPrompt.setForeground(MUTED);
-		pnlContent.add(lblPrompt, BorderLayout.CENTER);
+		if (laNhanVienDangNhap()) {
+			pnlContent.add(createThongKeHoatDong(), BorderLayout.CENTER);
+		} else if (laQuanLyDangNhap()) {
+			pnlContent.add(createThongKeQuanLy(), BorderLayout.CENTER);
+		} else {
+			JLabel lblPrompt = new JLabel("Chọn chức năng trên thanh menu để bắt đầu", SwingConstants.CENTER);
+			lblPrompt.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+			lblPrompt.setForeground(MUTED);
+			pnlContent.add(lblPrompt, BorderLayout.CENTER);
+		}
 
 		pnlWorkspace.add(pnlHeading, BorderLayout.NORTH);
 		pnlWorkspace.add(pnlContent, BorderLayout.CENTER);
 		return pnlWorkspace;
+	}
+
+	private boolean laNhanVienDangNhap() {
+		return layVaiTroChuanHoa().equals("nhanvien") || layVaiTroChuanHoa().equals("employee");
+	}
+
+	private boolean laQuanLyDangNhap() {
+		return layVaiTroChuanHoa().equals("quanly") || layVaiTroChuanHoa().equals("admin");
+	}
+
+	private String layVaiTroChuanHoa() {
+		if (taiKhoanDangNhap == null || taiKhoanDangNhap.getVaiTro() == null) {
+			return "";
+		}
+		return Normalizer.normalize(taiKhoanDangNhap.getVaiTro(), Normalizer.Form.NFD)
+				.replaceAll("\\p{M}", "")
+				.replaceAll("[^a-zA-Z]", "")
+				.toLowerCase(Locale.ROOT);
+	}
+
+	private JPanel createThongKeHoatDong() {
+		JPanel pnlDashboard = new JPanel(new BorderLayout(0, 22));
+		pnlDashboard.setOpaque(false);
+
+		JLabel lblTieuDe = new JLabel("TÌNH HÌNH HOẠT ĐỘNG GARA");
+		lblTieuDe.setFont(new Font("Segoe UI", Font.BOLD, 17));
+		lblTieuDe.setForeground(new Color(32, 55, 92));
+		JButton btnTaiLai = new JButton("Cập nhật số liệu");
+		btnTaiLai.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		JPanel pnlTieuDe = new JPanel(new BorderLayout(12, 0));
+		pnlTieuDe.setOpaque(false);
+		pnlTieuDe.add(lblTieuDe, BorderLayout.CENTER);
+		pnlTieuDe.add(btnTaiLai, BorderLayout.EAST);
+
+		JLabel[] lblGiaTri = new JLabel[4];
+		JPanel pnlThe = new JPanel(new GridLayout(2, 2, 16, 16));
+		pnlThe.setOpaque(false);
+		themTheThongKe(pnlThe, lblGiaTri, 0, "XE ĐÃ TIẾP NHẬN",
+				"Số phiếu tiếp nhận chưa bị hủy", new Color(36, 99, 235), "Tiếp nhận xe");
+		themTheThongKe(pnlThe, lblGiaTri, 1, "CHỜ KIỂM TRA",
+				"Phiếu tiếp nhận chưa có phiếu kiểm tra", new Color(217, 119, 6), "Kiểm tra xe");
+		themTheThongKe(pnlThe, lblGiaTri, 2, "CHỜ SỬA CHỮA",
+				"Phiếu sửa chữa đang chờ xử lý", new Color(124, 87, 194), "Lập phiếu sửa chữa");
+		themTheThongKe(pnlThe, lblGiaTri, 3, "CHỜ THANH TOÁN",
+				"Xe hoàn thành nhưng hóa đơn chưa thanh toán đủ", new Color(38, 132, 93), "Lập hóa đơn");
+
+		JLabel lblGhiChu = new JLabel("Số liệu được lấy trực tiếp từ các phiếu nghiệp vụ hiện có.");
+		lblGhiChu.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		lblGhiChu.setForeground(MUTED);
+		JPanel pnlThongTin = new JPanel(new BorderLayout(0, 16));
+		pnlThongTin.setOpaque(false);
+		pnlThongTin.add(pnlThe, BorderLayout.CENTER);
+		pnlThongTin.add(lblGhiChu, BorderLayout.SOUTH);
+
+		pnlDashboard.add(pnlTieuDe, BorderLayout.NORTH);
+		pnlDashboard.add(pnlThongTin, BorderLayout.CENTER);
+		btnTaiLai.addActionListener(event -> taiThongKeHoatDong(lblGiaTri, btnTaiLai));
+		taiThongKeHoatDong(lblGiaTri, btnTaiLai);
+		return pnlDashboard;
+	}
+
+	private JPanel createThongKeQuanLy() {
+		JPanel pnlDashboard = new JPanel(new BorderLayout(0, 22));
+		pnlDashboard.setOpaque(false);
+
+		JLabel lblTieuDe = new JLabel("TÌNH HÌNH HOẠT ĐỘNG GARA");
+		lblTieuDe.setFont(new Font("Segoe UI", Font.BOLD, 17));
+		lblTieuDe.setForeground(new Color(32, 55, 92));
+		JButton btnTaiLai = new JButton("Cập nhật số liệu");
+		btnTaiLai.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		JPanel pnlTieuDe = new JPanel(new BorderLayout(12, 0));
+		pnlTieuDe.setOpaque(false);
+		pnlTieuDe.add(lblTieuDe, BorderLayout.CENTER);
+		pnlTieuDe.add(btnTaiLai, BorderLayout.EAST);
+
+		JLabel[] lblGiaTri = new JLabel[4];
+		JPanel pnlThe = new JPanel(new GridLayout(2, 2, 16, 16));
+		pnlThe.setOpaque(false);
+		themTheThongKe(pnlThe, lblGiaTri, 0, "NHÂN VIÊN ĐANG TRONG CA",
+				"Có mặt / được phân công ở ca hiện tại", new Color(36, 99, 235), "Ca làm việc");
+		themTheThongKe(pnlThe, lblGiaTri, 1, "PHIẾU TIẾP NHẬN HÔM NAY",
+				"Số phiếu được lập trong ngày", new Color(217, 119, 6), "Tiếp nhận xe");
+		themTheThongKe(pnlThe, lblGiaTri, 2, "XE ĐANG SỬA CHỮA",
+				"Số xe duy nhất có phiếu đang sửa chữa", new Color(124, 87, 194), "Sửa chữa");
+		themTheThongKe(pnlThe, lblGiaTri, 3, "HÓA ĐƠN ĐÃ LẬP",
+				"Tổng số hóa đơn trong hệ thống", new Color(38, 132, 93), "Hóa đơn");
+
+		JLabel lblGhiChu = new JLabel("Số liệu nhân viên và phiếu tiếp nhận được tính theo ca hiện tại và ngày hôm nay.");
+		lblGhiChu.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		lblGhiChu.setForeground(MUTED);
+		JPanel pnlThongTin = new JPanel(new BorderLayout(0, 16));
+		pnlThongTin.setOpaque(false);
+		pnlThongTin.add(pnlThe, BorderLayout.CENTER);
+		pnlThongTin.add(lblGhiChu, BorderLayout.SOUTH);
+
+		pnlDashboard.add(pnlTieuDe, BorderLayout.NORTH);
+		pnlDashboard.add(pnlThongTin, BorderLayout.CENTER);
+		btnTaiLai.addActionListener(event -> taiThongKeQuanLy(lblGiaTri, btnTaiLai));
+		taiThongKeQuanLy(lblGiaTri, btnTaiLai);
+		return pnlDashboard;
+	}
+
+	private void themTheThongKe(JPanel pnlThe, JLabel[] lblGiaTri, int viTri,
+			String tieuDe, String moTa, Color mau, String tenChucNang) {
+		JPanel pnlCard = new JPanel(new BorderLayout(0, 12));
+		pnlCard.setBackground(Color.WHITE);
+		pnlCard.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createMatteBorder(0, 4, 0, 0, mau),
+				BorderFactory.createCompoundBorder(
+						BorderFactory.createLineBorder(new Color(221, 231, 245)),
+						new EmptyBorder(18, 16, 18, 16))));
+
+		JLabel lblTieuDe = new JLabel(tieuDe);
+		lblTieuDe.setFont(new Font("Segoe UI", Font.BOLD, 12));
+		lblTieuDe.setForeground(MUTED);
+		JLabel lblSoLuong = new JLabel("—", SwingConstants.LEFT);
+		lblSoLuong.setFont(new Font("Segoe UI", Font.BOLD, 34));
+		lblSoLuong.setForeground(mau);
+		JLabel lblMoTa = new JLabel("<html><div style='width:150px'>" + moTa + "</div></html>");
+		lblMoTa.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+		lblMoTa.setForeground(MUTED);
+
+		JPanel pnlChiTiet = new JPanel(new BorderLayout(0, 8));
+		pnlChiTiet.setOpaque(false);
+		pnlChiTiet.add(lblSoLuong, BorderLayout.NORTH);
+		pnlChiTiet.add(lblMoTa, BorderLayout.CENTER);
+		pnlCard.add(lblTieuDe, BorderLayout.NORTH);
+		pnlCard.add(pnlChiTiet, BorderLayout.CENTER);
+		ganSuKienClickThe(pnlCard, tenChucNang, lblTieuDe, pnlChiTiet, lblSoLuong, lblMoTa);
+		lblGiaTri[viTri] = lblSoLuong;
+		pnlThe.add(pnlCard);
+	}
+
+	private void ganSuKienClickThe(JPanel pnlCard, String tenChucNang, Component... thanhPhanThe) {
+		MouseAdapter suKienClick = new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent event) {
+				onMenuAction(tenChucNang);
+			}
+		};
+		pnlCard.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		pnlCard.addMouseListener(suKienClick);
+		for (Component thanhPhan : thanhPhanThe) {
+			thanhPhan.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			thanhPhan.addMouseListener(suKienClick);
+		}
+	}
+
+	private void taiThongKeHoatDong(JLabel[] lblGiaTri, JButton btnTaiLai) {
+		btnTaiLai.setEnabled(false);
+		new SwingWorker<ThongKeHoatDongGaraDAO.ThongKeHoatDong, Void>() {
+			@Override
+			protected ThongKeHoatDongGaraDAO.ThongKeHoatDong doInBackground() throws SQLException {
+				return new ThongKeHoatDongGaraDAO().layThongKe();
+			}
+
+			@Override
+			protected void done() {
+				try {
+					ThongKeHoatDongGaraDAO.ThongKeHoatDong thongKe = get();
+					lblGiaTri[0].setText(String.valueOf(thongKe.xeDaTiepNhan()));
+					lblGiaTri[1].setText(String.valueOf(thongKe.xeChoKiemTra()));
+					lblGiaTri[2].setText(String.valueOf(thongKe.xeChoSuaChua()));
+					lblGiaTri[3].setText(String.valueOf(thongKe.xeChoThanhToan()));
+				} catch (InterruptedException exception) {
+					Thread.currentThread().interrupt();
+					FormUI.showError("Đã ngắt khi tải thống kê hoạt động gara.");
+				} catch (ExecutionException exception) {
+					Throwable cause = exception.getCause();
+					String message = cause == null ? exception.getMessage() : cause.getMessage();
+					FormUI.showError("Không thể tải thống kê hoạt động gara: " + message);
+				} finally {
+					btnTaiLai.setEnabled(true);
+				}
+			}
+		}.execute();
+	}
+
+	private void taiThongKeQuanLy(JLabel[] lblGiaTri, JButton btnTaiLai) {
+		btnTaiLai.setEnabled(false);
+		new SwingWorker<ThongKeHoatDongGaraDAO.ThongKeQuanLy, Void>() {
+			@Override
+			protected ThongKeHoatDongGaraDAO.ThongKeQuanLy doInBackground() throws SQLException {
+				return new ThongKeHoatDongGaraDAO().layThongKeQuanLy();
+			}
+
+			@Override
+			protected void done() {
+				try {
+					ThongKeHoatDongGaraDAO.ThongKeQuanLy thongKe = get();
+					lblGiaTri[0].setText(thongKe.nhanVienCoMat() + " / "
+							+ thongKe.nhanVienDuocPhanCong());
+					lblGiaTri[1].setText(String.valueOf(thongKe.phieuTiepNhanHomNay()));
+					lblGiaTri[2].setText(String.valueOf(thongKe.xeDangSuaChua()));
+					lblGiaTri[3].setText(String.valueOf(thongKe.tongHoaDon()));
+				} catch (InterruptedException exception) {
+					Thread.currentThread().interrupt();
+					FormUI.showError("Đã ngắt khi tải thống kê dành cho quản lý.");
+				} catch (ExecutionException exception) {
+					Throwable cause = exception.getCause();
+					String message = cause == null ? exception.getMessage() : cause.getMessage();
+					FormUI.showError("Không thể tải thống kê dành cho quản lý: " + message);
+				} finally {
+					btnTaiLai.setEnabled(true);
+				}
+			}
+		}.execute();
 	}
 
 	private JPanel createStatusBar() {

@@ -7,9 +7,11 @@
 1. `database/QuanLyGaraOto.sql` — tạo database `a1` và toàn bộ bảng.
 2. `database/DuLieuMau.sql` — nạp dữ liệu mẫu vào database `a1`.
 
-Chỉ chạy file dữ liệu mẫu sau khi tạo schema thành công. File dữ liệu mẫu không cho phép chạy lặp để tránh trùng dữ liệu.
+Chỉ chạy file dữ liệu mẫu sau khi tạo schema thành công. File dữ liệu mẫu không cho phép chạy lặp để tránh trùng dữ liệu; muốn nạp lại, hãy dùng một database mới.
 
-Hai script trên đã bao gồm bảng chính sách bảo hành, bảng phụ tùng áp dụng chính sách và bảng phiếu yêu cầu bảo hành, cùng dữ liệu mẫu để thử tiếp nhận, chấp nhận, hoàn thành và từ chối yêu cầu.
+Bộ dữ liệu mẫu mở rộng bao gồm khách hàng và nhiều xe, tài khoản/nhân viên/lịch làm việc, phụ tùng/tồn kho, dịch vụ/khuyến mãi, tiếp nhận/kiểm tra/sửa chữa, hóa đơn và giao dịch thanh toán, bảo hành/đổi trả/bàn giao. Dữ liệu có nhiều trạng thái và mốc thời gian để thử báo cáo, công nợ, tồn kho và các luồng xử lý.
+
+Tài khoản demo: `NV001` đến `NV008` dùng mật khẩu `123456`; `NV009` và `NV010` dùng mật khẩu `654321`.
 
 Nếu database `a1` đã có schema cũ, không chạy lại file tạo database. Chạy `database/Migration_ChiTietHoaDon.sql` một lần để cập nhật cấu trúc chi tiết phiếu sửa chữa và hóa đơn.
 

@@ -274,14 +274,6 @@ public class FrmPhieuSuaChua extends JPanel {
         JLabel lblTitle = createSectionLabel("Thông tin phiếu sửa chữa");
         JPanel pnlField = new JPanel(new GridBagLayout());
         pnlField.setOpaque(false);
-        addField(pnlField, "Mã phiếu sửa chữa", txtMaPhieuSuaChua, 0, 0);
-        addField(pnlField, "Mã phiếu kiểm tra", cboPhieuKiemTra, 0, 1);
-        addField(pnlField, "Mã xe", txtMaXe, 0, 2);
-        addField(pnlField, "Mã khách hàng", txtMaKhachHang, 0, 3);
-        addField(pnlField, "Mã nhân viên", txtMaNhanVien, 0, 4);
-        addField(pnlField, "Ngày bắt đầu *", txtNgayBatDau, 0, 5);
-        addField(pnlField, "Ngày hoàn thành dự kiến *", txtNgayHoanThanhDuKien, 0, 6);
-        addField(pnlField, "Trạng thái", cboTrangThai, 0, 7);
         addField(pnlField, "Mã phiếu sửa chữa (tự động)", txtMaPhieuSuaChua, 0, 0);
         addField(pnlField, "Mã phiếu kiểm tra", cboPhieuKiemTra, 2, 0);
         addField(pnlField, "Mã xe", txtMaXe, 0, 1);
