@@ -228,6 +228,169 @@ public class HoaDonDAO extends BaseDAO<HoaDon> {
         return ds;
     }
 
+    public record LichSuHoaDon(String ma, LocalDate ngayLap, String maNV,
+            String maPhieu, BigDecimal tongThanhToan, String trangThai) {
+    }
+
+    // THÔNG TIN ĐẦY ĐỦ CỦA MỘT HÓA ĐƠN
+    public record ThongTinHoaDon(
+            String maHoaDon,
+            LocalDate ngayLap,
+            String maNV,
+            String tenNV,
+            String maPhieu,
+            String maKH,
+            String tenKH,
+            String soDT,
+            String maXe,
+            String bienSo,
+            String tenXe,
+            String maKM,
+            String tenKM,
+            BigDecimal tileGiam,
+            BigDecimal tienGiam,
+            BigDecimal tienVAT,
+            BigDecimal soTien,
+            String trangThai) {
+    }
+
+    // LẤY THÔNG TIN CHUNG CỦA HÓA ĐƠN THEO MÃ
+    public ThongTinHoaDon layThongTinHoaDon(String maHD) throws SQLException {
+        String sql = """
+                SELECT
+                    hd.maHoaDon,
+                    hd.ngayLap,
+                    hd.maNV,
+                    nv.hoTen AS tenNV,
+                    hd.maPhieuSuaChua,
+                    p.maKH,
+                    kh.hoTen AS tenKH,
+                    kh.soDT,
+                    p.maXe,
+                    x.bienSo,
+                    x.hangXe,
+                    x.dongXe,
+                    hd.maKM,
+                    km.tenKM,
+                    km.tileGiam,
+                    hd.tienGiamGia,
+                    hd.thueVAT,
+                    hd.soTien,
+                    hd.trangThai
+                FROM HoaDon hd
+                LEFT JOIN NhanVien nv ON hd.maNV = nv.maNV
+                LEFT JOIN PhieuSuaChua p
+                    ON hd.maPhieuSuaChua = p.maPhieuSuaChua
+                LEFT JOIN KhachHang kh ON p.maKH = kh.maKH
+                LEFT JOIN Xe x ON p.maXe = x.maXe
+                LEFT JOIN ChuongTrinhKhuyenMai km ON hd.maKM = km.maKM
+                WHERE hd.maHoaDon = ?
+                """;
+
+        try (PreparedStatement ps = conn().prepareStatement(sql)) {
+            ps.setString(1, maHD);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    String hangXe = rs.getString("hangXe");
+                    String dongXe = rs.getString("dongXe");
+
+                    String tenXe = ((hangXe == null ? "" : hangXe) + " "
+                            + (dongXe == null ? "" : dongXe)).trim();
+
+                    java.sql.Date ngay = rs.getDate("ngayLap");
+
+                    return new ThongTinHoaDon(
+                            rs.getString("maHoaDon"),
+                            ngay == null ? null : ngay.toLocalDate(),
+                            rs.getString("maNV"),
+                            rs.getString("tenNV"),
+                            rs.getString("maPhieuSuaChua"),
+                            rs.getString("maKH"),
+                            rs.getString("tenKH"),
+                            rs.getString("soDT"),
+                            rs.getString("maXe"),
+                            rs.getString("bienSo"),
+                            tenXe,
+                            rs.getString("maKM"),
+                            rs.getString("tenKM"),
+                            khacNull(rs.getBigDecimal("tileGiam")),
+                            khacNull(rs.getBigDecimal("tienGiamGia")),
+                            khacNull(rs.getBigDecimal("thueVAT")),
+                            khacNull(rs.getBigDecimal("soTien")),
+                            rs.getString("trangThai"));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // LẤY CHI TIẾT DỊCH VỤ / PHỤ TÙNG CỦA HÓA ĐƠN
+    public List<DongChiTiet> layChiTietHoaDon(String maHD) throws SQLException {
+        String sql = """
+                SELECT
+                    ct.maDV,
+                    dv.tenDV,
+                    ct.maPhuTung,
+                    pt.tenPhuTung,
+                    ct.soLuong,
+                    ct.donGia
+                FROM ChiTietHoaDon ct
+                LEFT JOIN DichVu dv ON ct.maDV = dv.maDV
+                LEFT JOIN PhuTung pt ON ct.maPhuTung = pt.maPhuTung
+                WHERE ct.maHoaDon = ?
+                ORDER BY
+                    CASE WHEN ct.maDV IS NULL THEN 1 ELSE 0 END
+                """;
+
+        List<DongChiTiet> ds = new ArrayList<>();
+
+        try (PreparedStatement ps = conn().prepareStatement(sql)) {
+            ps.setString(1, maHD);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    boolean laDV = rs.getString("maDV") != null;
+
+                    ds.add(new DongChiTiet(
+                            laDV,
+                            rs.getString(laDV ? "maDV" : "maPhuTung"),
+                            rs.getString(laDV ? "tenDV" : "tenPhuTung"),
+                            rs.getInt("soLuong"),
+                            khacNull(rs.getBigDecimal("donGia"))));
+                }
+            }
+        }
+
+        return ds;
+    }
+
+    public List<LichSuHoaDon> layLichSuHoaDon() throws SQLException {
+        String sql = """
+                SELECT maHoaDon, ngayLap, maNV, maPhieuSuaChua,
+                       soTien, trangThai
+                FROM HoaDon
+                ORDER BY ngayLap DESC, maHoaDon DESC
+                """;
+        List<LichSuHoaDon> ds = new ArrayList<>();
+        try (PreparedStatement ps = conn().prepareStatement(sql);
+                ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                java.sql.Date ngay = rs.getDate("ngayLap");
+
+                ds.add(new LichSuHoaDon(
+                        rs.getString("maHoaDon"),
+                        ngay == null ? null : ngay.toLocalDate(),
+                        rs.getString("maNV"),
+                        rs.getString("maPhieuSuaChua"),
+                        rs.getBigDecimal("soTien"),
+                        rs.getString("trangThai")));
+            }
+        }
+        return ds;
+    }
+
     // TIỆN ÍCH NỘI BỘ
     private Connection conn() throws SQLException {
         ConnectDB.getInstance().connect();
