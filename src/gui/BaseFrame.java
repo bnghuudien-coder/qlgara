@@ -115,6 +115,11 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Báo cáo tổng hợp");
 			return;
 		}
+		if ("Doanh thu".equals(featureName)) {
+			setContent(new FrmThongKeDoanhThu());
+			lblStatus.setText("Thống kê doanh thu");
+			return;
+		}
 		if ("Xe".equals(featureName) || "Cập nhật xe".equals(featureName)) {
 			setContent(new FrmXe());
 			lblStatus.setText("Quản lý xe");
@@ -339,7 +344,8 @@ public class BaseFrame extends JFrame {
 		themTheThongKe(pnlThe, lblGiaTri, 3, "HÓA ĐƠN ĐÃ LẬP",
 				"Tổng số hóa đơn trong hệ thống", new Color(38, 132, 93), "Hóa đơn");
 
-		JLabel lblGhiChu = new JLabel("Số liệu nhân viên và phiếu tiếp nhận được tính theo ca hiện tại và ngày hôm nay.");
+		JLabel lblGhiChu = new JLabel(
+				"Số liệu nhân viên và phiếu tiếp nhận được tính theo ca hiện tại và ngày hôm nay.");
 		lblGhiChu.setFont(new Font("Segoe UI", Font.PLAIN, 12));
 		lblGhiChu.setForeground(MUTED);
 		JPanel pnlThongTin = new JPanel(new BorderLayout(0, 16));
