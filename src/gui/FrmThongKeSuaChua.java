@@ -13,12 +13,7 @@ import java.awt.Font;
 import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.event.MouseWheelEvent;
-import java.io.BufferedWriter;
-import java.io.IOException;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -28,20 +23,15 @@ import java.util.List;
 
 import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTable;
 import javax.swing.BoxLayout;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.SwingConstants;
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.table.DefaultTableModel;
 
 import dao.BaoCaoSuaChuaDAO;
-import dao.BaoCaoSuaChuaDAO.ThongKePhieuSuaChua;
 import dao.BaoCaoSuaChuaDAO.ThongKeBieuDo;
 import dao.BaoCaoSuaChuaDAO.ThongKeSuDung;
 import dao.BaoCaoSuaChuaDAO.ThongKeTongQuan;
@@ -53,7 +43,6 @@ public class FrmThongKeSuaChua extends JPanel {
     private final AppComboBox<String> cboKyBieuDo = new AppComboBox<>();
     private final AppButton btnThongKe = new AppButton("Thống kê");
     private final AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
-    private final AppButton btnXuatBaoCao = new AppButton("Xuất báo cáo", AppButton.Style.SECONDARY);
 
     private final AppLabel lblTongPhieu = new AppLabel("—", AppLabel.Style.TITLE);
     private final AppLabel lblDaHoanThanh = new AppLabel("—", AppLabel.Style.TITLE);
@@ -64,19 +53,6 @@ public class FrmThongKeSuaChua extends JPanel {
     private final BangHot pnlPhuTungHot = new BangHot("PHỤ TÙNG HOT", new Color(22, 163, 74));
     private final AppLabel lblTrangThai = new AppLabel(
             "Chọn điều kiện rồi nhấn Thống kê", AppLabel.Style.MUTED);
-    private final AppLabel lblSoDong = new AppLabel("0 phiếu", AppLabel.Style.MUTED);
-
-    private final DefaultTableModel modelThongKe = new DefaultTableModel(
-            new Object[] { "Mã phiếu", "Mã xe", "Khách hàng", "Nhân viên",
-                    "Ngày bắt đầu", "Trạng thái", "Tổng tiền" },
-            0) {
-        @Override
-        public boolean isCellEditable(int row, int column) {
-            return false;
-        }
-    };
-
-    private final JTable tblThongKe = FormUI.createTable(modelThongKe);
 
     private final BaoCaoSuaChuaDAO baoCaoSuaChuaDao = new BaoCaoSuaChuaDAO();
     private static final DateTimeFormatter DINH_DANG_NGAY = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -113,15 +89,7 @@ public class FrmThongKeSuaChua extends JPanel {
         pnlHot.setOpaque(false);
         pnlHot.add(pnlDichVuHot);
         pnlHot.add(pnlPhuTungHot);
-        AppScrollPane scrChiTiet = new AppScrollPane(tblThongKe);
-        scrChiTiet.setPreferredSize(new Dimension(0, 230));
-        scrChiTiet.setMinimumSize(new Dimension(0, 180));
-        JPanel pnlDuLieu = new JPanel(new BorderLayout(0, 12));
-        pnlDuLieu.setOpaque(false);
-        pnlDuLieu.add(pnlHot, BorderLayout.NORTH);
-        pnlDuLieu.add(FormUI.createTableCard("Chi tiết phiếu sửa chữa", lblSoDong,
-                scrChiTiet), BorderLayout.CENTER);
-        pnlDetails.add(pnlDuLieu, BorderLayout.CENTER);
+        pnlDetails.add(pnlHot, BorderLayout.CENTER);
         pnlReportContent.add(pnlDetails, BorderLayout.CENTER);
         pnlContent.add(pnlReportContent, BorderLayout.CENTER);
 
@@ -141,8 +109,6 @@ public class FrmThongKeSuaChua extends JPanel {
                 "Theo dõi tình trạng phiếu sửa chữa, doanh thu và hiệu suất xử lý",
                 scrNoiDung), BorderLayout.CENTER);
         add(lblTrangThai, BorderLayout.SOUTH);
-        tblThongKe.setRowHeight(32);
-        tblThongKe.setFillsViewportHeight(true);
         thongKe();
     }
 
@@ -162,7 +128,6 @@ public class FrmThongKeSuaChua extends JPanel {
     private void ganSuKien() {
         btnThongKe.addActionListener(event -> thongKe());
         btnLamMoi.addActionListener(event -> lamMoi());
-        btnXuatBaoCao.addActionListener(event -> xuatBaoCao());
     }
 
     private void thongKe() {
@@ -182,7 +147,6 @@ public class FrmThongKeSuaChua extends JPanel {
                     denNgay, kySuDung, "Dịch vụ", null, null));
             capNhatBangHot(pnlPhuTungHot, baoCaoSuaChuaDao.layTopSuDung(
                     denNgay, kySuDung, "Phụ tùng", null, null));
-            capNhatBang(baoCaoSuaChuaDao.layChiTiet(tuNgay, denNgay, null, null));
             capNhatBieuDo(denNgay, null, null);
             lblTrangThai.setText("Đã cập nhật thống kê.");
         } catch (DateTimeParseException | IllegalArgumentException exception) {
@@ -213,22 +177,6 @@ public class FrmThongKeSuaChua extends JPanel {
         bangHot.setData(danhSach);
     }
 
-    private void capNhatBang(List<ThongKePhieuSuaChua> danhSach) {
-        modelThongKe.setRowCount(0);
-        for (ThongKePhieuSuaChua phieu : danhSach) {
-            modelThongKe.addRow(new Object[] {
-                    phieu.maPhieuSuaChua(),
-                    phieu.maXe(),
-                    phieu.tenKhachHang(),
-                    phieu.tenNhanVien(),
-                    phieu.ngayBatDau(),
-                    phieu.trangThai(),
-                    dinhDangTien(phieu.tongTien())
-            });
-        }
-        lblSoDong.setText(danhSach.size() + " phiếu");
-    }
-
     private void capNhatBieuDo(LocalDate denNgay, String trangThai, String maNV) throws SQLException {
         List<ThongKeBieuDo> danhSach = baoCaoSuaChuaDao.layTheoBieuDo(
                 denNgay, (String) cboKyBieuDo.getSelectedItem(), trangThai, maNV);
@@ -246,8 +194,6 @@ public class FrmThongKeSuaChua extends JPanel {
         txtTuNgay.setText(homNay.withDayOfMonth(1).toString());
         txtDenNgay.setText(homNay.toString());
         cboKySuDung.setSelectedIndex(0);
-        modelThongKe.setRowCount(0);
-        lblSoDong.setText("0 phiếu");
         lblTongPhieu.setText("—");
         lblDaHoanThanh.setText("—");
         lblDangXuLy.setText("—");
@@ -256,46 +202,6 @@ public class FrmThongKeSuaChua extends JPanel {
         pnlPhuTungHot.setData(List.of());
         pnlBieuDoTheoThang.setData(new String[0], new double[0]);
         lblTrangThai.setText("Đã làm mới điều kiện thống kê.");
-    }
-
-    private void xuatBaoCao() {
-        if (modelThongKe.getRowCount() == 0) {
-            hienThiLoi("Chưa có dữ liệu để xuất. Vui lòng thực hiện thống kê trước.");
-            return;
-        }
-
-        JFileChooser boChonTep = new JFileChooser();
-        boChonTep.setDialogTitle("Lưu báo cáo sửa chữa");
-        boChonTep.setSelectedFile(new java.io.File("bao-cao-sua-chua.csv"));
-        boChonTep.setFileFilter(new FileNameExtensionFilter("Tệp CSV (*.csv)", "csv"));
-        if (boChonTep.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-
-        Path duongDan = boChonTep.getSelectedFile().toPath();
-        try (BufferedWriter writer = Files.newBufferedWriter(duongDan, StandardCharsets.UTF_8)) {
-            writer.write('\uFEFF');
-            for (int column = 0; column < modelThongKe.getColumnCount(); column++) {
-                if (column > 0) {
-                    writer.write(",");
-                }
-                writer.write("\"" + modelThongKe.getColumnName(column) + "\"");
-            }
-            writer.newLine();
-            for (int row = 0; row < modelThongKe.getRowCount(); row++) {
-                for (int column = 0; column < modelThongKe.getColumnCount(); column++) {
-                    if (column > 0) {
-                        writer.write(",");
-                    }
-                    writer.write("\"" + String.valueOf(modelThongKe.getValueAt(row, column))
-                            .replace("\"", "\"\"") + "\"");
-                }
-                writer.newLine();
-            }
-            lblTrangThai.setText("Đã xuất báo cáo: " + duongDan);
-        } catch (IOException exception) {
-            hienThiLoi("Không thể xuất báo cáo: " + exception.getMessage());
-        }
     }
 
     private String dinhDangTien(BigDecimal giaTri) {
@@ -315,7 +221,7 @@ public class FrmThongKeSuaChua extends JPanel {
         FormUI.addField(pnlFields, "Xếp hạng theo", cboKySuDung, 0, 1);
         FormUI.addField(pnlFields, "Biểu đồ theo", cboKyBieuDo, 2, 1);
 
-        JPanel pnlButtons = FormUI.createButtonRow(btnThongKe, btnLamMoi, btnXuatBaoCao);
+        JPanel pnlButtons = FormUI.createButtonRow(btnThongKe, btnLamMoi);
         pnlCard.add(FormUI.createSectionTitle("Điều kiện thống kê"), BorderLayout.NORTH);
         pnlCard.add(pnlFields, BorderLayout.CENTER);
         pnlCard.add(pnlButtons, BorderLayout.SOUTH);
