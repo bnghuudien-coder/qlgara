@@ -59,6 +59,29 @@ public class BaoCaoSuaChuaDAO {
 
     private static final String SQL_NHAN_VIEN = "SELECT maNV, hoTen FROM NhanVien ORDER BY hoTen, maNV";
 
+    private static final String SQL_SU_DUNG_NHIEU_NHAT = "WITH DuLieu AS ("
+            + "SELECT CASE WHEN CONVERT(date, ps.ngayBatDau) = ? THEN N'Ngày' "
+            + "WHEN YEAR(ps.ngayBatDau) = YEAR(?) AND MONTH(ps.ngayBatDau) = MONTH(?) "
+            + "THEN N'Tháng' ELSE N'Năm' END AS ky, "
+            + "CASE WHEN ct.maPhuTung IS NULL THEN N'Dịch vụ' ELSE N'Phụ tùng' END AS loai, "
+            + "COALESCE(pt.maPhuTung, dv.maDV) AS ma, "
+            + "COALESCE(pt.tenPhuTung, dv.tenDV) AS ten, "
+            + "ct.soLuong "
+            + "FROM PhieuSuaChua ps "
+            + "JOIN ChiTietPhieuSuaChua ct ON ct.maPhieuSuaChua = ps.maPhieuSuaChua "
+            + "LEFT JOIN PhuTung pt ON pt.maPhuTung = ct.maPhuTung "
+            + "LEFT JOIN DichVu dv ON dv.maDV = ct.maDV "
+            + "WHERE ps.ngayBatDau >= ? AND ps.ngayBatDau < ? "
+            + "AND (? IS NULL OR ps.trangThai = ?) "
+            + "AND (? IS NULL OR ps.maNV = ?)), "
+            + "SuDung AS (SELECT ky, loai, ma, ten, SUM(soLuong) AS soLuong "
+            + "FROM DuLieu GROUP BY ky, loai, ma, ten), "
+            + "XepHang AS (SELECT ky, loai, ma, ten, soLuong, "
+            + "ROW_NUMBER() OVER (PARTITION BY ky, loai ORDER BY soLuong DESC, ten) AS thuHang "
+            + "FROM SuDung) "
+            + "SELECT ky, loai, ma, ten, soLuong FROM XepHang "
+            + "WHERE thuHang = 1 ORDER BY CASE ky WHEN N'Ngày' THEN 1 WHEN N'Tháng' THEN 2 ELSE 3 END, loai";
+
     public ThongKeTongQuan layTongQuan(LocalDate tuNgay, LocalDate denNgay,
             String trangThai, String maNV) throws SQLException {
         try (PreparedStatement statement = moStatement(SQL_TONG_QUAN)) {
@@ -138,6 +161,49 @@ public class BaoCaoSuaChuaDAO {
         return danhSach;
     }
 
+    public List<ThongKeBieuDo> layTheoBieuDo(LocalDate ngayMoc, String ky,
+            String trangThai, String maNV) throws SQLException {
+        LocalDate tuNgay;
+        LocalDate denNgay;
+        String nhan;
+        String nhom;
+        if ("Tuần".equals(ky)) {
+            tuNgay = ngayMoc.minusDays(6);
+            denNgay = ngayMoc.plusDays(1);
+            nhan = "CONVERT(varchar(10), CONVERT(date, ps.ngayBatDau), 23)";
+            nhom = "CONVERT(date, ps.ngayBatDau)";
+        } else if ("Tháng".equals(ky)) {
+            tuNgay = ngayMoc.withDayOfMonth(1);
+            denNgay = tuNgay.plusMonths(1);
+            nhan = "CONVERT(varchar(2), DAY(ps.ngayBatDau))";
+            nhom = "DAY(ps.ngayBatDau)";
+        } else {
+            tuNgay = ngayMoc.withDayOfYear(1);
+            denNgay = tuNgay.plusYears(1);
+            nhan = "CONVERT(varchar(2), MONTH(ps.ngayBatDau))";
+            nhom = "MONTH(ps.ngayBatDau)";
+        }
+        String sql = "SELECT " + nhan + " AS nhan, COUNT(*) AS soLuong "
+                + "FROM PhieuSuaChua ps WHERE ps.ngayBatDau >= ? AND ps.ngayBatDau < ? "
+                + "AND (? IS NULL OR ps.trangThai = ?) AND (? IS NULL OR ps.maNV = ?) "
+                + "GROUP BY " + nhom + " ORDER BY " + nhom;
+        List<ThongKeBieuDo> danhSach = new ArrayList<>();
+        try (PreparedStatement statement = moStatement(sql)) {
+            statement.setDate(1, Date.valueOf(tuNgay));
+            statement.setDate(2, Date.valueOf(denNgay));
+            datBoLoc(statement, 3, trangThai);
+            datBoLoc(statement, 5, maNV);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    danhSach.add(new ThongKeBieuDo(
+                            resultSet.getString("nhan"),
+                            resultSet.getInt("soLuong")));
+                }
+            }
+        }
+        return danhSach;
+    }
+
     public List<NhanVienThongKe> layDanhSachNhanVien() throws SQLException {
         List<NhanVienThongKe> danhSach = new ArrayList<>();
         try (PreparedStatement statement = moStatement(SQL_NHAN_VIEN);
@@ -146,6 +212,90 @@ public class BaoCaoSuaChuaDAO {
                 danhSach.add(new NhanVienThongKe(
                         resultSet.getString("maNV"),
                         resultSet.getString("hoTen")));
+            }
+        }
+        return danhSach;
+    }
+
+    public List<ThongKeSuDung> laySuDungNhieuNhat(LocalDate ngayMoc,
+            String trangThai, String maNV) throws SQLException {
+        LocalDate dauNam = ngayMoc.withDayOfYear(1);
+        List<ThongKeSuDung> danhSach = new ArrayList<>();
+        try (PreparedStatement statement = moStatement(SQL_SU_DUNG_NHIEU_NHAT)) {
+            int viTri = 1;
+            statement.setDate(viTri++, Date.valueOf(ngayMoc));
+            statement.setDate(viTri++, Date.valueOf(ngayMoc));
+            statement.setDate(viTri++, Date.valueOf(ngayMoc));
+            statement.setDate(viTri++, Date.valueOf(dauNam));
+            statement.setDate(viTri++, Date.valueOf(ngayMoc.plusDays(1)));
+            viTri = datBoLocVaTraVeViTri(statement, viTri, trangThai);
+            viTri = datBoLocVaTraVeViTri(statement, viTri, maNV);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    danhSach.add(new ThongKeSuDung(
+                            resultSet.getString("ky"),
+                            resultSet.getString("loai"),
+                            resultSet.getString("ma"),
+                            resultSet.getString("ten"),
+                            resultSet.getInt("soLuong")));
+                }
+            }
+        }
+        return danhSach;
+    }
+
+    public List<ThongKeSuDung> layTopSuDung(LocalDate ngayMoc, String ky,
+            String loai, String trangThai, String maNV) throws SQLException {
+        LocalDate tuNgay;
+        LocalDate denNgay;
+        if ("Ngày".equals(ky)) {
+            tuNgay = ngayMoc;
+            denNgay = ngayMoc.plusDays(1);
+        } else if ("Tháng".equals(ky)) {
+            tuNgay = ngayMoc.withDayOfMonth(1);
+            denNgay = tuNgay.plusMonths(1);
+        } else {
+            tuNgay = ngayMoc.withDayOfYear(1);
+            denNgay = tuNgay.plusYears(1);
+        }
+
+        StringBuilder sql = new StringBuilder(
+                "SELECT TOP 5 "
+                + "CASE WHEN ct.maPhuTung IS NULL THEN N'Dịch vụ' ELSE N'Phụ tùng' END AS loai, "
+                + "COALESCE(pt.maPhuTung, dv.maDV) AS ma, "
+                + "COALESCE(pt.tenPhuTung, dv.tenDV) AS ten, "
+                + "SUM(ct.soLuong) AS soLuong "
+                + "FROM PhieuSuaChua ps "
+                + "JOIN ChiTietPhieuSuaChua ct ON ct.maPhieuSuaChua = ps.maPhieuSuaChua "
+                + "LEFT JOIN PhuTung pt ON pt.maPhuTung = ct.maPhuTung "
+                + "LEFT JOIN DichVu dv ON dv.maDV = ct.maDV "
+                + "WHERE ps.ngayBatDau >= ? AND ps.ngayBatDau < ? "
+                + "AND (? IS NULL OR ps.trangThai = ?) "
+                + "AND (? IS NULL OR ps.maNV = ?) ");
+        if ("Dịch vụ".equals(loai)) {
+            sql.append("AND ct.maDV IS NOT NULL ");
+        } else if ("Phụ tùng".equals(loai)) {
+            sql.append("AND ct.maPhuTung IS NOT NULL ");
+        }
+        sql.append("GROUP BY CASE WHEN ct.maPhuTung IS NULL THEN N'Dịch vụ' ELSE N'Phụ tùng' END, "
+                + "COALESCE(pt.maPhuTung, dv.maDV), COALESCE(pt.tenPhuTung, dv.tenDV) "
+                + "ORDER BY SUM(ct.soLuong) DESC, ten");
+
+        List<ThongKeSuDung> danhSach = new ArrayList<>();
+        try (PreparedStatement statement = moStatement(sql.toString())) {
+            statement.setDate(1, Date.valueOf(tuNgay));
+            statement.setDate(2, Date.valueOf(denNgay));
+            datBoLoc(statement, 3, trangThai);
+            datBoLoc(statement, 5, maNV);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    danhSach.add(new ThongKeSuDung(
+                            ky,
+                            resultSet.getString("loai"),
+                            resultSet.getString("ma"),
+                            resultSet.getString("ten"),
+                            resultSet.getInt("soLuong")));
+                }
             }
         }
         return danhSach;
@@ -180,6 +330,12 @@ public class BaoCaoSuaChuaDAO {
         statement.setString(viTri + 1, boLoc);
     }
 
+    private int datBoLocVaTraVeViTri(PreparedStatement statement, int viTri, String giaTri)
+            throws SQLException {
+        datBoLoc(statement, viTri, giaTri);
+        return viTri + 2;
+    }
+
     public record ThongKeTongQuan(int tongPhieu, int daHoanThanh, int dangXuLy,
             BigDecimal doanhThu) {
     }
@@ -195,7 +351,13 @@ public class BaoCaoSuaChuaDAO {
     public record ThongKeTheoThang(int nam, int thang, int soLuong) {
     }
 
+    public record ThongKeBieuDo(String nhan, int soLuong) {
+    }
+
     public record NhanVienThongKe(String maNV, String hoTen) {
+    }
+
+    public record ThongKeSuDung(String ky, String loai, String ma, String ten, int soLuong) {
     }
 
 }
