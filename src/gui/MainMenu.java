@@ -30,8 +30,8 @@ public final class MainMenu extends JMenuBar {
 				"Quản lý công nợ", "Bàn giao xe");
 		addItems(frame, mnuSearch, "Khách hàng", "Xe", "Lịch sử sửa chữa",
 				"Phiếu tiếp nhận", "Phiếu sửa chữa", "Hóa đơn", "Phụ tùng", "Nhân viên");
-		addItems(frame, mnuReports, "Doanh thu", "Sửa chữa", "Khách hàng",
-				"Phụ tùng tồn kho", "Công nợ", "Số lượng xe sửa chữa", "Báo cáo tổng hợp");
+		addItems(frame, mnuReports, "Thống kê Doanh thu", "Thống kê Sửa chữa",
+				"Thống kê Phụ tùng", "Báo cáo tổng hợp");
 
 		MenuBarSupport.configure(this,
 				new JMenu[] {mnuSystem, mnuCatalog, mnuUpdate, mnuProcess, mnuSearch, mnuReports},

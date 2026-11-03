@@ -6,9 +6,12 @@ import connectDB.ConnectDB;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import util.MaTuDong;
 
 public class PhieuNhapXuatKhoDAO extends BaseDAO<PhieuNhapXuatKho> {
@@ -70,95 +73,195 @@ public class PhieuNhapXuatKhoDAO extends BaseDAO<PhieuNhapXuatKho> {
         }
     }
 
-    public boolean luuGiaoDichKho(PhieuNhapXuatKho phieu, List<ChiTietPhieuNhap> chiTietList, boolean isNhapKho) {
-        Connection con = null;
+    public boolean luuGiaoDichKho(
+            PhieuNhapXuatKho phieu, List<ChiTietPhieuNhap> chiTietList, boolean isNhapKho)
+            throws SQLException {
+        validateChiTiet(chiTietList);
+        Connection con = ConnectDB.getConnection();
+        if (con == null) {
+            throw new SQLException("Không thể kết nối cơ sở dữ liệu để lưu giao dịch kho.");
+        }
+        boolean autoCommit = con.getAutoCommit();
         try {
-            ConnectDB.getInstance().connect();
-            con = ConnectDB.getConnection();
-            if (con == null) {
-                throw new SQLException("Không thể kết nối cơ sở dữ liệu để lưu giao dịch kho.");
-            }
             con.setAutoCommit(false);
-
-            try (PreparedStatement stmtChiTiet = con.prepareStatement(
-                    "INSERT INTO ChiTietPhieuNhap "
-                            + "(maPhieuNhapXuat, maPhuTung, soLuong, donGia, ghiChu) VALUES (?, ?, ?, ?, ?)");
-                    PreparedStatement stmtCapNhatTon = con.prepareStatement(
-                            "UPDATE PhuTung SET soLuongTon = soLuongTon "
-                                    + (isNhapKho ? "+" : "-") + " ? WHERE maPhuTung = ?")) {
-                if (!insert(con, phieu)) {
-                    throw new SQLException("Không thể lưu thông tin phiếu nhập xuất kho.");
-                }
-
-                for (ChiTietPhieuNhap ct : chiTietList) {
-                    stmtChiTiet.setString(1, ct.getMaPhieuNhapXuat());
-                    stmtChiTiet.setString(2, ct.getMaPhuTung());
-                    stmtChiTiet.setInt(3, ct.getSoLuong());
-                    stmtChiTiet.setDouble(4, ct.getDonGia());
-                    stmtChiTiet.setString(5, ct.getGhiChu());
-                    stmtChiTiet.addBatch();
-
-                    stmtCapNhatTon.setInt(1, ct.getSoLuong());
-                    stmtCapNhatTon.setString(2, ct.getMaPhuTung());
-                    stmtCapNhatTon.addBatch();
-                }
-
-                stmtChiTiet.executeBatch();
-                stmtCapNhatTon.executeBatch();
-            }
-
-            if (con == null || con.isClosed()) return false;
-
-            con.setAutoCommit(false);
-
             if (!insert(con, phieu)) {
-                throw new SQLException("Không thể lưu thông tin phiếu.");
+                throw new SQLException("Không thể lưu thông tin phiếu nhập xuất kho.");
             }
-
-            String sqlChiTiet = "INSERT INTO ChiTietPhieuNhap (maPhieuNhapXuat, maPhuTung, soLuong, donGia, ghiChu) VALUES (?, ?, ?, ?, ?)";
-            String sqlUpdateTon = "UPDATE PhuTung SET soLuongTon = soLuongTon " + (isNhapKho ? "+" : "-") + " ? WHERE maPhuTung = ?";
-
-            try (PreparedStatement stmtChiTiet = con.prepareStatement(sqlChiTiet);
-                 PreparedStatement stmtTon = con.prepareStatement(sqlUpdateTon)) {
-                
-                for (ChiTietPhieuNhap ct : chiTietList) {
-                    stmtChiTiet.setString(1, ct.getMaPhieuNhapXuat());
-                    stmtChiTiet.setString(2, ct.getMaPhuTung());
-                    stmtChiTiet.setInt(3, ct.getSoLuong());
-                    stmtChiTiet.setDouble(4, ct.getDonGia());
-                    stmtChiTiet.setString(5, ct.getGhiChu() != null ? ct.getGhiChu() : "");
-                    stmtChiTiet.addBatch();
-
-                    stmtTon.setInt(1, ct.getSoLuong());
-                    stmtTon.setString(2, ct.getMaPhuTung());
-                    stmtTon.addBatch();
-                }
-
-                stmtChiTiet.executeBatch();
-                stmtTon.executeBatch();
+            for (ChiTietPhieuNhap chiTiet : chiTietList) {
+                insertChiTiet(con, chiTiet);
+                capNhatTonKho(con, chiTiet.getMaPhuTung(), (isNhapKho ? 1 : -1) * chiTiet.getSoLuong());
             }
-
             con.commit();
             return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
+        } catch (SQLException exception) {
             try {
-                if (con != null) {
-                    con.rollback();
-                }
-                if (con != null) con.rollback();
-            } catch (SQLException ex) {
-                ex.printStackTrace();
+                con.rollback();
+            } catch (SQLException rollbackException) {
+                exception.addSuppressed(rollbackException);
             }
-            return false;
+            throw exception;
         } finally {
             try {
-                if (con != null && !con.isClosed()) {
-                    con.setAutoCommit(true);
+                con.setAutoCommit(autoCommit);
+            } catch (SQLException restoreException) {
+                if (con.getAutoCommit() != autoCommit) {
+                    throw restoreException;
                 }
-                if (con != null && !con.isClosed()) con.setAutoCommit(true);
-            } catch (SQLException e) {
-                e.printStackTrace();
+            }
+        }
+    }
+
+    public boolean capNhatGiaoDichKho(
+            String maPhieuNhapXuat, List<ChiTietPhieuNhap> chiTietMoi, boolean isNhapKho)
+            throws SQLException {
+        validateChiTiet(chiTietMoi);
+        Connection con = ConnectDB.getConnection();
+        if (con == null) {
+            throw new SQLException("Không thể kết nối cơ sở dữ liệu để cập nhật giao dịch kho.");
+        }
+        boolean autoCommit = con.getAutoCommit();
+        try {
+            con.setAutoCommit(false);
+            boolean isNhapCu = layLoaiPhieu(con, maPhieuNhapXuat);
+            List<ChiTietPhieuNhap> chiTietCu = layChiTietPhieu(con, maPhieuNhapXuat);
+            Map<String, Integer> thayDoiTonKho = new HashMap<>();
+            for (ChiTietPhieuNhap chiTiet : chiTietCu) {
+                themThayDoiTonKho(thayDoiTonKho, chiTiet.getMaPhuTung(),
+                        (isNhapCu ? -1 : 1) * chiTiet.getSoLuong());
+            }
+            for (ChiTietPhieuNhap chiTiet : chiTietMoi) {
+                themThayDoiTonKho(thayDoiTonKho, chiTiet.getMaPhuTung(),
+                        (isNhapKho ? 1 : -1) * chiTiet.getSoLuong());
+            }
+            for (Map.Entry<String, Integer> thayDoi : thayDoiTonKho.entrySet()) {
+                capNhatTonKho(con, thayDoi.getKey(), thayDoi.getValue());
+            }
+
+            try (PreparedStatement statement = con.prepareStatement(
+                    "DELETE FROM ChiTietPhieuNhap WHERE maPhieuNhapXuat = ?")) {
+                statement.setString(1, maPhieuNhapXuat);
+                statement.executeUpdate();
+            }
+            try (PreparedStatement statement = con.prepareStatement(
+                    "UPDATE PhieuNhapXuatKho SET kieuPhieu = ? WHERE maPhieuNhapXuat = ?")) {
+                statement.setString(1, isNhapKho ? "Nhập" : "Xuất");
+                statement.setString(2, maPhieuNhapXuat);
+                if (statement.executeUpdate() != 1) {
+                    throw new SQLException("Không tìm thấy phiếu cần cập nhật: " + maPhieuNhapXuat);
+                }
+            }
+            for (ChiTietPhieuNhap chiTiet : chiTietMoi) {
+                chiTiet.setMaPhieuNhapXuat(maPhieuNhapXuat);
+                insertChiTiet(con, chiTiet);
+            }
+            con.commit();
+            return true;
+        } catch (SQLException exception) {
+            try {
+                con.rollback();
+            } catch (SQLException rollbackException) {
+                exception.addSuppressed(rollbackException);
+            }
+            throw exception;
+        } finally {
+            try {
+                con.setAutoCommit(autoCommit);
+            } catch (SQLException restoreException) {
+                if (con.getAutoCommit() != autoCommit) {
+                    throw restoreException;
+                }
+            }
+        }
+    }
+
+    private boolean layLoaiPhieu(Connection con, String maPhieuNhapXuat) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement(
+                "SELECT kieuPhieu FROM PhieuNhapXuatKho WHERE maPhieuNhapXuat = ?")) {
+            statement.setString(1, maPhieuNhapXuat);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (!resultSet.next()) {
+                    throw new SQLException("Không tìm thấy phiếu cần cập nhật: " + maPhieuNhapXuat);
+                }
+                String kieuPhieu = resultSet.getString("kieuPhieu");
+                if ("Nhập".equalsIgnoreCase(kieuPhieu)) {
+                    return true;
+                }
+                if ("Xuất".equalsIgnoreCase(kieuPhieu)) {
+                    return false;
+                }
+                throw new SQLException("Loại phiếu không hợp lệ: " + kieuPhieu);
+            }
+        }
+    }
+
+    private List<ChiTietPhieuNhap> layChiTietPhieu(Connection con, String maPhieuNhapXuat)
+            throws SQLException {
+        List<ChiTietPhieuNhap> danhSach = new ArrayList<>();
+        try (PreparedStatement statement = con.prepareStatement(
+                "SELECT maPhieuNhapXuat, maPhuTung, soLuong, donGia, ghiChu "
+                        + "FROM ChiTietPhieuNhap WHERE maPhieuNhapXuat = ?")) {
+            statement.setString(1, maPhieuNhapXuat);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    ChiTietPhieuNhap chiTiet = new ChiTietPhieuNhap();
+                    chiTiet.setMaPhieuNhapXuat(resultSet.getString("maPhieuNhapXuat"));
+                    chiTiet.setMaPhuTung(resultSet.getString("maPhuTung"));
+                    chiTiet.setSoLuong(resultSet.getInt("soLuong"));
+                    chiTiet.setDonGia(resultSet.getDouble("donGia"));
+                    chiTiet.setGhiChu(resultSet.getString("ghiChu"));
+                    danhSach.add(chiTiet);
+                }
+            }
+        }
+        return danhSach;
+    }
+
+    private void insertChiTiet(Connection con, ChiTietPhieuNhap chiTiet) throws SQLException {
+        try (PreparedStatement statement = con.prepareStatement(
+                "INSERT INTO ChiTietPhieuNhap "
+                        + "(maPhieuNhapXuat, maPhuTung, soLuong, donGia, ghiChu) VALUES (?, ?, ?, ?, ?)")) {
+            statement.setString(1, chiTiet.getMaPhieuNhapXuat());
+            statement.setString(2, chiTiet.getMaPhuTung());
+            statement.setInt(3, chiTiet.getSoLuong());
+            statement.setDouble(4, chiTiet.getDonGia());
+            statement.setString(5, chiTiet.getGhiChu());
+            statement.executeUpdate();
+        }
+    }
+
+    private void capNhatTonKho(Connection con, String maPhuTung, int thayDoi) throws SQLException {
+        if (thayDoi == 0) {
+            return;
+        }
+        String sql = thayDoi < 0
+                ? "UPDATE PhuTung SET soLuongTon = soLuongTon + ? "
+                        + "WHERE maPhuTung = ? AND soLuongTon >= ?"
+                : "UPDATE PhuTung SET soLuongTon = soLuongTon + ? WHERE maPhuTung = ?";
+        try (PreparedStatement statement = con.prepareStatement(sql)) {
+            statement.setInt(1, thayDoi);
+            statement.setString(2, maPhuTung);
+            if (thayDoi < 0) {
+                statement.setInt(3, -thayDoi);
+            }
+            if (statement.executeUpdate() != 1) {
+                throw new SQLException("Không đủ tồn kho hoặc không tìm thấy phụ tùng " + maPhuTung);
+            }
+        }
+    }
+
+    private void themThayDoiTonKho(Map<String, Integer> thayDoiTonKho, String maPhuTung, int thayDoi) {
+        thayDoiTonKho.merge(maPhuTung, thayDoi, Integer::sum);
+    }
+
+    private void validateChiTiet(List<ChiTietPhieuNhap> chiTietList) throws SQLException {
+        if (chiTietList == null || chiTietList.isEmpty()) {
+            throw new SQLException("Phiếu giao dịch phải có ít nhất một phụ tùng.");
+        }
+        for (ChiTietPhieuNhap chiTiet : chiTietList) {
+            if (chiTiet.getMaPhuTung() == null || chiTiet.getMaPhuTung().isBlank()
+                    || chiTiet.getSoLuong() == null || chiTiet.getSoLuong() <= 0
+                    || chiTiet.getDonGia() == null || chiTiet.getDonGia() <= 0) {
+                throw new SQLException("Thông tin chi tiết phụ tùng không hợp lệ.");
             }
         }
     }

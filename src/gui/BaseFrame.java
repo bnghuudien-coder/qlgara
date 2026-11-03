@@ -115,7 +115,7 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Báo cáo tổng hợp");
 			return;
 		}
-		if ("Doanh thu".equals(featureName)) {
+		if ("Thống kê Doanh thu".equals(featureName)) {
 			setContent(new FrmThongKeDoanhThu());
 			lblStatus.setText("Thống kê doanh thu");
 			return;
@@ -135,7 +135,7 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Lập phiếu nhập kho phụ tùng");
 			return;
 		}
-		if ("Phụ tùng tồn kho".equals(featureName)) {
+		if ("Thống kê Phụ tùng".equals(featureName)) {
 			setContent(new FrmThongKeTonKho());
 			lblStatus.setText("Thống kê tồn kho phụ tùng");
 			return;
@@ -187,7 +187,7 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Bàn giao xe");
 			return;
 		}
-		if ("Sửa chữa".equals(featureName)) {
+		if ("Thống kê Sửa chữa".equals(featureName)) {
 			setContent(new FrmThongKeSuaChua());
 			lblStatus.setText("Sửa chữa");
 			return;

@@ -2,6 +2,7 @@ package gui;
 
 import dao.BaoCaoTongHopDAO;
 import dao.BaoCaoTongHopDAO.ChiTieuBaoCao;
+import dao.BaoCaoTongHopDAO.DiemXuHuong;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FontMetrics;
@@ -13,27 +14,34 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.LocalDateTime;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 
 public class FrmBaoCaoTongHop extends JPanel {
-    private final AppTextField txtTuNgay = new AppTextField(12);
-    private final AppTextField txtDenNgay = new AppTextField(12);
+    private final AppComboBox<String> cboLoaiKy = new AppComboBox<>();
     private final AppComboBox<String> cboNhomBaoCao = new AppComboBox<>();
-    private final JLabel lblTrangThai = new AppLabel("Chọn khoảng thời gian và nhóm báo cáo", AppLabel.Style.MUTED);
-    private final JLabel[] lblTieuChiTongHop = new JLabel[4];
-    private final JLabel[] lblGiaTriTongHop = new JLabel[4];
+    private final JLabel lblTrangThai = new AppLabel(
+            "Chưa thống kê. Chọn điều kiện rồi nhấn Tạo báo cáo.", AppLabel.Style.MUTED);
+    private final JLabel[] lblTieuChiTongHop = new JLabel[9];
+    private final JLabel[] lblGiaTriTongHop = new JLabel[9];
     private final BaoCaoTongHopDAO baoCaoTongHopDAO = new BaoCaoTongHopDAO();
+    private JLabel lblTieuDeBieuDo;
     private final DefaultTableModel modelBaoCao = new DefaultTableModel(
             new Object[] {"Chỉ tiêu", "Kỳ trước", "Kỳ báo cáo", "Chênh lệch"}, 0) {
         @Override
@@ -42,21 +50,23 @@ public class FrmBaoCaoTongHop extends JPanel {
         }
     };
     private final javax.swing.JTable tblBaoCao = FormUI.createTable(modelBaoCao);
-    private final BieuDoCot pnlBieuDo = new BieuDoCot();
+    private final BieuDoDuong pnlBieuDo = new BieuDoDuong();
 
     public FrmBaoCaoTongHop() {
         setLayout(new BorderLayout(0, 16));
         setOpaque(false);
 
-        cboNhomBaoCao.addItem("Tất cả");
+        cboLoaiKy.addItem("Ngày");
+        cboLoaiKy.addItem("Tháng");
+        cboLoaiKy.addItem("Năm");
+
         cboNhomBaoCao.addItem("Doanh thu");
         cboNhomBaoCao.addItem("Sửa chữa");
         cboNhomBaoCao.addItem("Khách hàng");
         cboNhomBaoCao.addItem("Nhân viên");
         cboNhomBaoCao.addItem("Phụ tùng");
-        LocalDate homNay = LocalDate.now();
-        txtTuNgay.setText(homNay.withDayOfMonth(1).toString());
-        txtDenNgay.setText(homNay.toString());
+        cboNhomBaoCao.addItem("Công nợ");
+        cboNhomBaoCao.addItem("Kho");
 
         JPanel pnlContent = new JPanel(new BorderLayout(0, 14));
         pnlContent.setOpaque(false);
@@ -71,42 +81,52 @@ public class FrmBaoCaoTongHop extends JPanel {
                 new AppScrollPane(tblBaoCao)), BorderLayout.CENTER);
         pnlReportContent.add(pnlReportDetails, BorderLayout.CENTER);
         pnlContent.add(pnlReportContent, BorderLayout.CENTER);
+        JScrollPane scrNoiDung = new JScrollPane(pnlContent);
+        scrNoiDung.setBorder(null);
+        scrNoiDung.setOpaque(false);
+        scrNoiDung.getViewport().setOpaque(false);
+        scrNoiDung.getVerticalScrollBar().setUnitIncrement(16);
         add(FormUI.createPage("BÁO CÁO TỔNG HỢP",
-                "Tổng quan các hoạt động chính của gara theo khoảng thời gian", pnlContent), BorderLayout.CENTER);
+                "Tổng quan các hoạt động chính của gara theo ngày, tháng hoặc năm", scrNoiDung),
+                BorderLayout.CENTER);
         JPanel pnlStatus = new JPanel(new BorderLayout());
         pnlStatus.setOpaque(false);
         pnlStatus.add(lblTrangThai, BorderLayout.WEST);
         add(pnlStatus, BorderLayout.SOUTH);
+        datTrangThaiChuaThongKe();
     }
 
-    public void capNhatBieuDo(String[] nhan, double[] giaTri) {
-        if (nhan == null || giaTri == null || nhan.length != giaTri.length) {
-            throw new IllegalArgumentException("Nhãn và giá trị biểu đồ phải có cùng số phần tử.");
+    public void capNhatBieuDo(String[] nhan, String[] tenDuong, double[][] giaTri) {
+        if (nhan == null || tenDuong == null || giaTri == null || tenDuong.length != giaTri.length) {
+            throw new IllegalArgumentException("Nhãn, đường biểu đồ và dữ liệu không khớp.");
         }
-        for (int index = 0; index < nhan.length; index++) {
-            if (nhan[index] == null || !Double.isFinite(giaTri[index]) || giaTri[index] < 0) {
-                throw new IllegalArgumentException("Dữ liệu biểu đồ không hợp lệ tại vị trí " + index + ".");
+        for (double[] duong : giaTri) {
+            if (duong == null || duong.length != nhan.length) {
+                throw new IllegalArgumentException("Mỗi đường biểu đồ phải có đủ giá trị theo nhãn.");
+            }
+            for (double diem : duong) {
+                if (!Double.isFinite(diem) || diem < 0) {
+                    throw new IllegalArgumentException("Giá trị biểu đồ không hợp lệ.");
+                }
             }
         }
-        pnlBieuDo.setData(nhan, giaTri);
+        pnlBieuDo.setData(nhan, tenDuong, giaTri);
     }
 
     private JPanel createChartCard() {
         AppPanel pnlCard = AppPanel.card(new BorderLayout(0, 12));
-        pnlCard.add(FormUI.createSectionTitle("Biểu đồ tổng hợp"), BorderLayout.NORTH);
+        lblTieuDeBieuDo = FormUI.createSectionTitle("Xu hướng theo thời gian");
+        pnlCard.add(lblTieuDeBieuDo, BorderLayout.NORTH);
         pnlCard.add(pnlBieuDo, BorderLayout.CENTER);
-        pnlCard.setPreferredSize(new java.awt.Dimension(0, 260));
+        pnlCard.setPreferredSize(new java.awt.Dimension(0, 360));
         return pnlCard;
     }
 
     private JPanel createFilterCard() {
         AppPanel pnlCard = FormUI.createCard();
         JPanel pnlFields = FormUI.createFieldsPanel();
-        FormUI.addField(pnlFields, "Từ ngày", txtTuNgay, 0, 0);
-        FormUI.addField(pnlFields, "Đến ngày", txtDenNgay, 2, 0);
-        FormUI.addField(pnlFields, "Nhóm báo cáo", cboNhomBaoCao, 0, 1);
-        txtTuNgay.setToolTipText("Định dạng ngày: yyyy-MM-dd");
-        txtDenNgay.setToolTipText("Định dạng ngày: yyyy-MM-dd");
+        FormUI.addField(pnlFields, "Thống kê theo", cboLoaiKy, 0, 0);
+        FormUI.addField(pnlFields, "Nhóm báo cáo", cboNhomBaoCao, 2, 0);
 
         AppButton btnTaoBaoCao = new AppButton("Tạo báo cáo");
         AppButton btnXuatBaoCao = new AppButton("Xuất báo cáo", AppButton.Style.SECONDARY);
@@ -120,9 +140,13 @@ public class FrmBaoCaoTongHop extends JPanel {
     }
 
     private JPanel createSummaryCards() {
-        JPanel pnlSummary = new JPanel(new GridLayout(1, 4, 12, 0));
+        JPanel pnlSummary = new JPanel(new GridLayout(3, 3, 12, 12));
         pnlSummary.setOpaque(false);
-        String[] tieuChiMacDinh = {"Doanh thu", "Phiếu sửa chữa", "Khách hàng", "Phụ tùng đã xuất"};
+        String[] tieuChiMacDinh = {
+                "Doanh thu", "Hóa đơn", "Phiếu sửa chữa",
+                "Khách hàng", "Nhân viên", "Phụ tùng bán",
+                "Công nợ", "Nhập kho", "Xuất kho"
+        };
         for (int index = 0; index < lblTieuChiTongHop.length; index++) {
             pnlSummary.add(createMetricCard(index, tieuChiMacDinh[index]));
         }
@@ -132,37 +156,46 @@ public class FrmBaoCaoTongHop extends JPanel {
     private JPanel createMetricCard(int index, String title) {
         AppPanel pnlCard = AppPanel.card(new BorderLayout(0, 8));
         lblTieuChiTongHop[index] = new AppLabel(title, AppLabel.Style.MUTED);
-        lblGiaTriTongHop[index] = new AppLabel("—", AppLabel.Style.TITLE);
+        lblGiaTriTongHop[index] = new AppLabel("0", AppLabel.Style.TITLE);
         pnlCard.add(lblTieuChiTongHop[index], BorderLayout.NORTH);
         pnlCard.add(lblGiaTriTongHop[index], BorderLayout.CENTER);
         return pnlCard;
     }
 
-    private void taoBaoCao() {
-        LocalDate tuNgay;
-        LocalDate denNgay;
-        try {
-            tuNgay = LocalDate.parse(txtTuNgay.getText().trim());
-            denNgay = LocalDate.parse(txtDenNgay.getText().trim());
-        } catch (DateTimeParseException exception) {
-            hienThiLoi("Ngày không hợp lệ. Vui lòng nhập theo định dạng yyyy-MM-dd.");
-            return;
+    private void datTrangThaiChuaThongKe() {
+        modelBaoCao.setRowCount(0);
+        for (JLabel lblGiaTri : lblGiaTriTongHop) {
+            lblGiaTri.setText("0");
         }
-        if (denNgay.isBefore(tuNgay)) {
-            hienThiLoi("Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.");
-            return;
-        }
+        pnlBieuDo.setData(new String[0], new String[0], new double[0][]);
+        lblTieuDeBieuDo.setText("Xu hướng theo thời gian");
+        lblTrangThai.setText("Chưa thống kê. Chọn điều kiện rồi nhấn Tạo báo cáo.");
+    }
 
-        LocalDate tuKyBaoCao = tuNgay;
-        LocalDate denKyBaoCao = denNgay.plusDays(1);
-        LocalDate tuKyTruoc = tuNgay.minusDays(denNgay.toEpochDay() - tuNgay.toEpochDay() + 1);
+    private void taoBaoCao() {
+        LocalDate tuNgay = layNgayBatDau();
+        LocalDate denNgay = layNgayKetThuc(tuNgay);
+        String loaiKy = (String) cboLoaiKy.getSelectedItem();
+        LocalDate tuKyTruoc = switch (loaiKy) {
+            case "Ngày" -> tuNgay.minusDays(1);
+            case "Tháng" -> tuNgay.minusMonths(1);
+            case "Năm" -> tuNgay.minusYears(1);
+            default -> throw new IllegalStateException("Kỳ thống kê không hợp lệ.");
+        };
+        String nhomDuocChon = (String) cboNhomBaoCao.getSelectedItem();
+        String doPhanGiai = switch (loaiKy) {
+            case "Ngày" -> "HOUR";
+            case "Tháng" -> "DAY";
+            case "Năm" -> "MONTH";
+            default -> throw new IllegalStateException("Kỳ thống kê không hợp lệ.");
+        };
         try {
             List<ChiTieuBaoCao> tatCaChiTieu = baoCaoTongHopDAO.layBaoCao(
-                    tuKyTruoc, tuKyBaoCao, denKyBaoCao);
-            String nhomDuocChon = (String) cboNhomBaoCao.getSelectedItem();
+                    tuKyTruoc, tuNgay, denNgay);
+            List<DiemXuHuong> duLieuXuHuong =
+                    baoCaoTongHopDAO.layXuHuong(tuNgay, denNgay, nhomDuocChon, doPhanGiai);
             List<ChiTieuBaoCao> chiTieuHienThi = tatCaChiTieu.stream()
-                    .filter(chiTieu -> "Tất cả".equals(nhomDuocChon)
-                            || chiTieu.nhom().equals(nhomDuocChon))
+                    .filter(chiTieu -> chiTieu.nhom().equals(nhomDuocChon))
                     .toList();
             modelBaoCao.setRowCount(0);
             for (ChiTieuBaoCao chiTieu : chiTieuHienThi) {
@@ -174,10 +207,9 @@ public class FrmBaoCaoTongHop extends JPanel {
                 });
             }
             capNhatTheTongHop(tatCaChiTieu);
-            capNhatBieuDo(chiTieuHienThi.stream()
-                    .map(chiTieu -> nhanBieuDo(chiTieu.chiTieu())).toArray(String[]::new),
-                    chiTieuHienThi.stream().mapToDouble(ChiTieuBaoCao::kyBaoCao).toArray());
-            lblTrangThai.setText("Báo cáo từ " + tuNgay + " đến " + denNgay
+            capNhatBieuDoXuHuong(tuNgay, denNgay, doPhanGiai, duLieuXuHuong);
+            lblTrangThai.setText("Báo cáo " + nhomDuocChon + " từ " + tuNgay + " đến "
+                    + denNgay.minusDays(1)
                     + " — " + chiTieuHienThi.size() + " chỉ tiêu.");
         } catch (java.sql.SQLException exception) {
             lblTrangThai.setText("Không thể tạo báo cáo do lỗi cơ sở dữ liệu.");
@@ -185,28 +217,116 @@ public class FrmBaoCaoTongHop extends JPanel {
         }
     }
 
-    private String nhanBieuDo(String chiTieu) {
-        return switch (chiTieu) {
-            case "Tổng doanh thu" -> "Doanh thu";
-            case "Số hóa đơn" -> "Hóa đơn";
-            case "Số phiếu sửa chữa" -> "Phiếu sửa chữa";
-            case "Phiếu đã hoàn thành" -> "Hoàn thành";
-            case "Khách hàng sử dụng dịch vụ" -> "Khách hàng";
-            case "Phiếu tiếp nhận" -> "Tiếp nhận";
-            case "Nhân viên được phân công" -> "Nhân viên";
-            case "Số ca được phân công" -> "Số ca";
-            case "Số lượng phụ tùng đã xuất" -> "SL phụ tùng";
-            case "Giá trị phụ tùng đã xuất" -> "GT phụ tùng";
-            default -> chiTieu;
+    private LocalDate layNgayBatDau() {
+        LocalDate homNay = LocalDate.now();
+        return switch ((String) cboLoaiKy.getSelectedItem()) {
+            case "Ngày" -> homNay;
+            case "Tháng" -> homNay.withDayOfMonth(1);
+            case "Năm" -> homNay.withDayOfYear(1);
+            default -> throw new IllegalStateException("Kỳ thống kê không hợp lệ.");
+        };
+    }
+
+    private LocalDate layNgayKetThuc(LocalDate tuNgay) {
+        return switch ((String) cboLoaiKy.getSelectedItem()) {
+            case "Ngày" -> tuNgay.plusDays(1);
+            case "Tháng" -> tuNgay.plusMonths(1);
+            case "Năm" -> tuNgay.plusYears(1);
+            default -> throw new IllegalStateException("Kỳ thống kê không hợp lệ.");
+        };
+    }
+
+    private void capNhatBieuDoXuHuong(
+            LocalDate tuNgay, LocalDate denNgay, String doPhanGiai, List<DiemXuHuong> duLieu) {
+        List<LocalDateTime> cacMoc = taoCacMocThoiGian(tuNgay, denNgay, doPhanGiai);
+        Map<String, Map<LocalDateTime, Double>> giaTriTheoDuong = new LinkedHashMap<>();
+        for (DiemXuHuong diem : duLieu) {
+            giaTriTheoDuong.computeIfAbsent(diem.chiTieu(), key -> new TreeMap<>())
+                    .put(diem.mocThoiGian(), diem.giaTri());
+        }
+        String nhom = (String) cboNhomBaoCao.getSelectedItem();
+        if ("Kho".equals(nhom)) {
+            giaTriTheoDuong.putIfAbsent("Số lượng phụ tùng nhập kho", Map.of());
+            giaTriTheoDuong.putIfAbsent("Số lượng phụ tùng xuất kho", Map.of());
+        } else if (giaTriTheoDuong.isEmpty()) {
+            giaTriTheoDuong.put(tenChiTieuTheoNhom(nhom), Map.of());
+        }
+
+        String[] nhan = cacMoc.stream().map(moc -> dinhDangMoc(moc, doPhanGiai))
+                .toArray(String[]::new);
+        String[] tenDuong = giaTriTheoDuong.keySet().toArray(String[]::new);
+        double[][] giaTri = new double[tenDuong.length][cacMoc.size()];
+        for (int duong = 0; duong < tenDuong.length; duong++) {
+            Map<LocalDateTime, Double> giaTriTheoMoc = giaTriTheoDuong.get(tenDuong[duong]);
+            for (int moc = 0; moc < cacMoc.size(); moc++) {
+                giaTri[duong][moc] = giaTriTheoMoc.getOrDefault(cacMoc.get(moc), 0.0);
+            }
+        }
+        capNhatBieuDo(nhan, tenDuong, giaTri);
+        String ky = switch ((String) cboLoaiKy.getSelectedItem()) {
+            case "Ngày" -> tuNgay.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            case "Tháng" -> tuNgay.format(DateTimeFormatter.ofPattern("MM/yyyy"));
+            case "Năm" -> String.valueOf(tuNgay.getYear());
+            default -> throw new IllegalStateException("Kỳ thống kê không hợp lệ.");
+        };
+        lblTieuDeBieuDo.setText("Xu hướng " + nhom + " — " + ky);
+    }
+
+    private List<LocalDateTime> taoCacMocThoiGian(
+            LocalDate tuNgay, LocalDate denNgay, String doPhanGiai) {
+        List<LocalDateTime> cacMoc = new ArrayList<>();
+        LocalDateTime moc = switch (doPhanGiai) {
+            case "HOUR" -> tuNgay.atStartOfDay();
+            case "DAY", "MONTH" -> tuNgay.atStartOfDay();
+            default -> throw new IllegalArgumentException("Độ phân giải thời gian không hợp lệ.");
+        };
+        LocalDateTime ketThuc = denNgay.atStartOfDay();
+        while (moc.isBefore(ketThuc)) {
+            cacMoc.add(moc);
+            moc = switch (doPhanGiai) {
+                case "HOUR" -> moc.plusHours(1);
+                case "DAY" -> moc.plusDays(1);
+                case "MONTH" -> moc.plusMonths(1);
+                default -> throw new IllegalArgumentException("Độ phân giải thời gian không hợp lệ.");
+            };
+        }
+        return cacMoc;
+    }
+
+    private String dinhDangMoc(LocalDateTime moc, String doPhanGiai) {
+        return switch (doPhanGiai) {
+            case "HOUR" -> moc.format(DateTimeFormatter.ofPattern("HH:mm"));
+            case "DAY" -> moc.format(DateTimeFormatter.ofPattern("dd"));
+            case "MONTH" -> moc.format(DateTimeFormatter.ofPattern("MM/yyyy"));
+            default -> throw new IllegalArgumentException("Độ phân giải thời gian không hợp lệ.");
+        };
+    }
+
+    private String tenChiTieuTheoNhom(String nhom) {
+        return switch (nhom) {
+            case "Doanh thu" -> "Tổng doanh thu";
+            case "Sửa chữa" -> "Số phiếu sửa chữa";
+            case "Khách hàng" -> "Khách hàng sử dụng dịch vụ";
+            case "Nhân viên" -> "Nhân viên được phân công";
+            case "Phụ tùng" -> "Số lượng phụ tùng đã xuất";
+            case "Công nợ" -> "Công nợ còn lại của hóa đơn trong kỳ";
+            case "Kho" -> "Số lượng phụ tùng nhập kho";
+            default -> throw new IllegalArgumentException("Nhóm báo cáo không hợp lệ: " + nhom);
         };
     }
 
     private void capNhatTheTongHop(List<ChiTieuBaoCao> chiTieu) {
         String[] tieuChiCanHienThi = {
-                "Tổng doanh thu", "Số phiếu sửa chữa",
-                "Khách hàng sử dụng dịch vụ", "Số lượng phụ tùng đã xuất"
+                "Tổng doanh thu", "Số hóa đơn", "Số phiếu sửa chữa",
+                "Khách hàng sử dụng dịch vụ", "Nhân viên được phân công",
+                "Số lượng phụ tùng đã xuất", "Công nợ còn lại của hóa đơn trong kỳ",
+                "Số lượng phụ tùng nhập kho", "Số lượng phụ tùng xuất kho"
         };
-        String[] nhanThe = {"Doanh thu", "Phiếu sửa chữa", "Khách hàng", "Phụ tùng đã xuất"};
+        String[] nhanThe = {
+                "Doanh thu", "Hóa đơn", "Phiếu sửa chữa",
+                "Khách hàng", "Nhân viên", "Phụ tùng bán",
+                "Công nợ", "Nhập kho", "Xuất kho"
+        };
         for (int index = 0; index < tieuChiCanHienThi.length; index++) {
             String tenChiTieu = tieuChiCanHienThi[index];
             ChiTieuBaoCao giaTri = chiTieu.stream()
@@ -272,23 +392,32 @@ public class FrmBaoCaoTongHop extends JPanel {
         JOptionPane.showMessageDialog(this, noiDung, "Báo cáo tổng hợp", JOptionPane.ERROR_MESSAGE);
     }
 
-    private static final class BieuDoCot extends JComponent {
-        private static final int PADDING_LEFT = 56;
-        private static final int PADDING_RIGHT = 20;
-        private static final int PADDING_TOP = 16;
-        private static final int PADDING_BOTTOM = 40;
+    private static final class BieuDoDuong extends JComponent {
+        private static final int PADDING_LEFT = 64;
+        private static final int PADDING_RIGHT = 28;
+        private static final int PADDING_TOP = 42;
+        private static final int PADDING_BOTTOM = 54;
+        private static final Color[] MAU_DUONG = {
+                new Color(37, 99, 235),
+                new Color(22, 163, 74),
+                new Color(217, 119, 6)
+        };
         private String[] nhan = new String[0];
-        private double[] giaTri = new double[0];
+        private String[] tenDuong = new String[0];
+        private double[][] giaTri = new double[0][];
 
-        private BieuDoCot() {
+        private BieuDoDuong() {
             setOpaque(true);
             setBackground(Color.WHITE);
-            setPreferredSize(new java.awt.Dimension(600, 190));
+            setPreferredSize(new java.awt.Dimension(800, 300));
         }
 
-        private void setData(String[] nhan, double[] giaTri) {
+        private void setData(String[] nhan, String[] tenDuong, double[][] giaTri) {
             this.nhan = Arrays.copyOf(nhan, nhan.length);
-            this.giaTri = Arrays.copyOf(giaTri, giaTri.length);
+            this.tenDuong = Arrays.copyOf(tenDuong, tenDuong.length);
+            this.giaTri = Arrays.stream(giaTri)
+                    .map(duong -> Arrays.copyOf(duong, duong.length))
+                    .toArray(double[][]::new);
             repaint();
         }
 
@@ -308,7 +437,7 @@ public class FrmBaoCaoTongHop extends JPanel {
                     return;
                 }
 
-                if (giaTri.length == 0) {
+                if (nhan.length == 0 || giaTri.length == 0) {
                     g2.setColor(UIConfig.COLOR_MUTED);
                     String message = "Chưa có dữ liệu biểu đồ";
                     FontMetrics metrics = g2.getFontMetrics();
@@ -318,8 +447,10 @@ public class FrmBaoCaoTongHop extends JPanel {
                     return;
                 }
 
-                double giaTriLonNhat = Arrays.stream(giaTri).max().orElse(0);
-                double mocTruc = giaTriLonNhat == 0 ? 1 : giaTriLonNhat;
+                double giaTriLonNhat = Arrays.stream(giaTri)
+                        .flatMapToDouble(Arrays::stream)
+                        .max().orElse(0);
+                double mocTruc = giaTriLonNhat == 0 ? 1 : giaTriLonNhat * 1.1;
                 int soDuongLuoi = 4;
                 for (int moc = 0; moc <= soDuongLuoi; moc++) {
                     int y = PADDING_TOP + chartHeight - chartHeight * moc / soDuongLuoi;
@@ -327,46 +458,71 @@ public class FrmBaoCaoTongHop extends JPanel {
                     g2.setColor(UIConfig.COLOR_TABLE_GRID);
                     g2.drawLine(PADDING_LEFT, y, PADDING_LEFT + chartWidth, y);
                     g2.setColor(UIConfig.COLOR_MUTED);
-                    String text = String.format("%.0f", giaTriTruc);
+                    String text = String.format(Locale.forLanguageTag("vi-VN"), "%,.0f", giaTriTruc);
                     FontMetrics metrics = g2.getFontMetrics();
                     g2.drawString(text, PADDING_LEFT - metrics.stringWidth(text) - 8, y + 4);
                 }
 
-                double khoangMoiCot = (double) chartWidth / nhan.length;
-                int rongCot = Math.max(4, (int) (khoangMoiCot * 0.56));
-                for (int index = 0; index < giaTri.length; index++) {
-                    int caoCot = (int) Math.round(giaTri[index] / mocTruc * chartHeight);
-                    int x = PADDING_LEFT + (int) (index * khoangMoiCot
-                            + (khoangMoiCot - rongCot) / 2);
-                    int y = PADDING_TOP + chartHeight - caoCot;
-                    g2.setColor(UIConfig.COLOR_PRIMARY);
-                    g2.fillRoundRect(x, y, rongCot, Math.max(caoCot, 2), 8, 8);
-
+                FontMetrics metrics = g2.getFontMetrics();
+                int viTriChuThich = PADDING_LEFT;
+                for (int duong = 0; duong < tenDuong.length; duong++) {
+                    Color mauDuong = MAU_DUONG[duong % MAU_DUONG.length];
+                    g2.setColor(mauDuong);
+                    g2.setStroke(new java.awt.BasicStroke(2.5f));
+                    g2.drawLine(viTriChuThich, 18, viTriChuThich + 20, 18);
+                    g2.fillOval(viTriChuThich + 8, 14, 8, 8);
                     g2.setColor(UIConfig.COLOR_TEXT);
-                    FontMetrics metrics = g2.getFontMetrics();
-                    String nhanCot = nhan[index];
-                    int centerX = PADDING_LEFT + (int) ((index + 0.5) * khoangMoiCot);
-                    int maxLabelWidth = Math.max(24, (int) khoangMoiCot - 6);
-                    String nhanHienThi = nhanCot;
-                    while (metrics.stringWidth(nhanHienThi) > maxLabelWidth
-                            && nhanHienThi.length() > 3) {
-                        nhanHienThi = nhanHienThi.substring(0, nhanHienThi.length() - 2) + "…";
+                    String ten = tenDuong[duong];
+                    g2.drawString(ten, viTriChuThich + 26, 22);
+                    viTriChuThich += 34 + metrics.stringWidth(ten);
+                }
+
+                int buocNhan = Math.max(1, (int) Math.ceil((double) nhan.length / 10));
+                for (int duong = 0; duong < giaTri.length; duong++) {
+                    g2.setColor(MAU_DUONG[duong % MAU_DUONG.length]);
+                    g2.setStroke(new java.awt.BasicStroke(2.5f));
+                    int xTruoc = -1;
+                    int yTruoc = -1;
+                    for (int diem = 0; diem < nhan.length; diem++) {
+                        int x = nhan.length == 1
+                                ? PADDING_LEFT + chartWidth / 2
+                                : PADDING_LEFT + (int) ((long) diem * chartWidth / (nhan.length - 1));
+                        int y = PADDING_TOP + chartHeight
+                                - (int) Math.round(giaTri[duong][diem] / mocTruc * chartHeight);
+                        if (xTruoc >= 0) {
+                            g2.drawLine(xTruoc, yTruoc, x, y);
+                        }
+                        g2.fillOval(x - 4, y - 4, 8, 8);
+                        xTruoc = x;
+                        yTruoc = y;
                     }
-                    g2.drawString(nhanHienThi,
-                            centerX - metrics.stringWidth(nhanHienThi) / 2, height - 12);
-                    String giaTriCot = String.format("%.0f", giaTri[index]);
-                    g2.drawString(giaTriCot,
-                            x + (rongCot - metrics.stringWidth(giaTriCot)) / 2,
-                            Math.max(PADDING_TOP + metrics.getAscent(), y - 5));
                 }
 
                 g2.setColor(UIConfig.COLOR_BORDER);
                 g2.drawLine(PADDING_LEFT, PADDING_TOP, PADDING_LEFT, PADDING_TOP + chartHeight);
                 g2.drawLine(PADDING_LEFT, PADDING_TOP + chartHeight,
                         PADDING_LEFT + chartWidth, PADDING_TOP + chartHeight);
+                g2.setColor(UIConfig.COLOR_MUTED);
+                for (int index = 0; index < nhan.length; index += buocNhan) {
+                    veNhanTrucX(g2, nhan[index], index, chartWidth, metrics);
+                }
+                if ((nhan.length - 1) % buocNhan != 0) {
+                    veNhanTrucX(g2, nhan[nhan.length - 1], nhan.length - 1, chartWidth, metrics);
+                }
             } finally {
                 g2.dispose();
             }
+        }
+
+        private void veNhanTrucX(
+                Graphics2D g2, String nhanMoc, int index, int chartWidth, FontMetrics metrics) {
+            int x = nhan.length == 1
+                    ? PADDING_LEFT + chartWidth / 2
+                    : PADDING_LEFT + (int) ((long) index * chartWidth / (nhan.length - 1));
+            int xText = Math.max(PADDING_LEFT, Math.min(
+                    x - metrics.stringWidth(nhanMoc) / 2,
+                    PADDING_LEFT + chartWidth - metrics.stringWidth(nhanMoc)));
+            g2.drawString(nhanMoc, xText, getHeight() - 18);
         }
     }
 }

@@ -8,8 +8,6 @@ import entity.PhieuYeuCauBaoHanh;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -173,7 +171,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         return pnlBang;
     }
 
-    private void taiDanhSachHoaDon() {
+    private void taiDanhSachHoaDon() { // cho combobox
         dangNapHoaDon = true;
         cboHoaDon.removeAllItems();
         cboPhuTung.removeAllItems();
@@ -189,7 +187,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         taiPhuTungTheoHoaDon();
     }
 
-    private void taiPhuTungTheoHoaDon() {
+    private void taiPhuTungTheoHoaDon() { // cho combobox
         cboPhuTung.removeAllItems();
         LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
         if (hoaDon == null) {
@@ -207,13 +205,14 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         }
     }
 
-    private void capNhatGioiHanSoLuong() {
+    private void capNhatGioiHanSoLuong() { 
         LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
         int gioiHan = phuTung == null ? 1 : Math.max(1, phuTung.soLuongHoaDon());
         spnSoLuong.setModel(new SpinnerNumberModel(1, 1, gioiHan, 1));
         capNhatKetQuaBaoHanh();
     }
 
+    // Cập nhật kết quả bảo hành dựa trên hóa đơn và phụ tùng được chọn
     private void capNhatKetQuaBaoHanh() {
         LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
         LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
@@ -241,6 +240,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         btnThem.setEnabled(dangTaoMoi && baoHanhConHan);
     }
 
+    // hiển thị danh sách yêu cầu bảo hành trong bảng
     private void taiDanhSachYeuCau() {
         modelYeuCau.setRowCount(0);
         dsYeuCau.clear();
@@ -263,7 +263,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         }
     }
 
-    private void hienThiYeuCauDangChon() {
+    private void hienThiYeuCauDangChon() { // lấy yêu cầu đang chọn và set thông tin lên form
         int row = tblYeuCau.getSelectedRow();
         if (row < 0 || row >= dsYeuCau.size()) {
             return;
@@ -300,6 +300,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         capNhatTrangThaiNut(choXuLy, daChapNhan);
     }
 
+    // lấy hóa đơn hiện tại của yêu cầu đang chọn set lên lại cbb 
     private void chonHoaDonHienTai(YeuCauHienThi yeuCau) {
         for (int i = 0; i < cboHoaDon.getItemCount(); i++) {
             if (cboHoaDon.getItemAt(i).maHoaDon().equals(yeuCau.maHoaDon())) {
@@ -307,10 +308,6 @@ public class FrmTiepNhanBaoHanh extends JPanel {
                 return;
             }
         }
-        LuaChonHoaDon hoaDon = new LuaChonHoaDon(yeuCau.maHoaDon(),
-                yeuCau.tenKhachHang() == null ? "Khách hàng" : yeuCau.tenKhachHang(), null);
-        cboHoaDon.addItem(hoaDon);
-        cboHoaDon.setSelectedItem(hoaDon);
     }
 
     private void themYeuCau() {
@@ -482,6 +479,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         return dsYeuCau.get(row);
     }
 
+    // tô màu và cuộn đến yêu cầu bảo hành vừa được thêm hoặc cập nhật
     private void chonYeuCau(String maPhieuYCBH) {
         for (int row = 0; row < dsYeuCau.size(); row++) {
             if (maPhieuYCBH.equals(dsYeuCau.get(row).maPhieuYCBH())) {
@@ -537,7 +535,7 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         return ngay == null ? "" : ngay.toLocalDateTime().format(DINH_DANG_NGAY_GIO);
     }
 
-    private void thongBao(String noiDung, int loai) {
+    private void thongBao(String noiDung, int loai) { 
         JOptionPane.showMessageDialog(this, noiDung, "Yêu cầu bảo hành", loai);
     }
 

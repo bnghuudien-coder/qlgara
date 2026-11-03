@@ -66,27 +66,25 @@ BEGIN TRY
 
     INSERT INTO dbo.CaLamViec (maCa, gioBatDau, gioKetThuc) VALUES
     ('CA001', '07:00', '11:00'),
-    ('CA002', '11:00', '15:00'),
-    ('CA003', '15:00', '19:00'),
-    ('CA004', '07:00', '15:00'),
-    ('CA005', '11:00', '19:00');
+    ('CA002', '13:00', '17:00'),
+    ('CA003', '18:00', '22:00');
 
     INSERT INTO dbo.LichLamViec (maLich, maCa, maNV, ngayLamViec, trangThai) VALUES
     ('LLV001', 'CA001', 'NV001', '2026-10-30', N'Có mặt'),
     ('LLV002', 'CA002', 'NV002', '2026-10-30', N'Có mặt'),
-    ('LLV003', 'CA004', 'NV003', '2026-10-30', N'Có mặt'),
-    ('LLV004', 'CA005', 'NV004', '2026-10-30', N'Có mặt'),
+    ('LLV003', 'CA003', 'NV003', '2026-10-30', N'Có mặt'),
+    ('LLV004', 'CA001', 'NV004', '2026-10-30', N'Có mặt'),
     ('LLV005', 'CA001', 'NV005', '2026-10-31', N'Có mặt'),
     ('LLV006', 'CA002', 'NV006', '2026-10-31', N'Có mặt'),
-    ('LLV007', 'CA004', 'NV007', '2026-10-31', N'Có mặt'),
-    ('LLV008', 'CA005', 'NV008', '2026-10-31', N'Vắng mặt'),
+    ('LLV007', 'CA003', 'NV007', '2026-10-31', N'Có mặt'),
+    ('LLV008', 'CA001', 'NV008', '2026-10-31', N'Vắng mặt'),
     ('LLV009', 'CA001', 'NV001', '2026-11-02', N'Đã phân công'),
     ('LLV010', 'CA002', 'NV002', '2026-11-02', N'Đã phân công'),
-    ('LLV011', 'CA004', 'NV003', '2026-11-02', N'Đã phân công'),
-    ('LLV012', 'CA005', 'NV004', '2026-11-02', N'Đã phân công'),
+    ('LLV011', 'CA003', 'NV003', '2026-11-02', N'Đã phân công'),
+    ('LLV012', 'CA001', 'NV004', '2026-11-02', N'Đã phân công'),
     ('LLV013', 'CA001', 'NV005', '2026-11-03', N'Đã phân công'),
     ('LLV014', 'CA002', 'NV006', '2026-11-03', N'Đã phân công'),
-    ('LLV015', 'CA004', 'NV009', '2026-11-03', N'Đã phân công');
+    ('LLV015', 'CA003', 'NV009', '2026-11-03', N'Đã phân công');
 
     INSERT INTO dbo.PhuTung
         (maPhuTung, tenPhuTung, donViTinh, giaNhap, giaBan, soLuongTon, nhaCungCap, trangThai)

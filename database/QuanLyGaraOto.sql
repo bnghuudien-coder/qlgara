@@ -1,14 +1,18 @@
 -- Chạy file này trước DuLieuMau.sql trên SQL Server.
--- Script không xóa dữ liệu: chỉ tạo schema cho database chưa có bảng.
-IF DB_ID(N'a1') IS NULL
-    CREATE DATABASE a1;
+-- CẢNH BÁO: Script xóa và tạo lại database a1, bao gồm toàn bộ dữ liệu hiện có.
+USE master;
+GO
+
+IF DB_ID(N'a1') IS NOT NULL
+BEGIN
+    ALTER DATABASE a1 SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE a1;
+END;
+
+CREATE DATABASE a1;
 GO
 
 USE a1;
-GO
-
-IF EXISTS (SELECT 1 FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo'))
-    THROW 50000, N'Database a1 đã có bảng. Không chạy lại script tạo mới để tránh ghi đè schema hiện có.', 1;
 GO
 
 CREATE TABLE KhachHang (

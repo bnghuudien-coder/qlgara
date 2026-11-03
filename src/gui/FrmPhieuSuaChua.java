@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -50,12 +52,14 @@ import dao.DichVuDAO;
 import dao.PhieuKiemTraDAO;
 import dao.PhieuSuaChuaDAO;
 import dao.PhuTungDAO;
+import dao.XeDAO;
 import entity.ChiTietPhieuSuaChua;
 import entity.DichVu;
 import entity.PhieuKiemTra;
 import entity.PhieuSuaChua;
 import entity.PhuTung;
 import entity.TaiKhoan;
+import entity.Xe;
 import util.MaTuDong;
 
 public class FrmPhieuSuaChua extends JPanel {
@@ -116,7 +120,9 @@ public class FrmPhieuSuaChua extends JPanel {
     private final DichVuDAO dichVuDAO = new DichVuDAO();
     private final PhuTungDAO phuTungDAO = new PhuTungDAO();
     private final PhieuKiemTraDAO phieuKiemTraDAO = new PhieuKiemTraDAO();
+    private final XeDAO xeDAO = new XeDAO();
     private final TaiKhoan taiKhoanHienTai;
+    private final Map<String, String> bienSoTheoMaXe = new HashMap<>();
 
     private final DecimalFormat df = new DecimalFormat("#,### VNĐ");
 
@@ -200,7 +206,8 @@ public class FrmPhieuSuaChua extends JPanel {
                     boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof PhieuKiemTra phieuKiemTra) {
-                    setText(phieuKiemTra.getMaPhieuKiemTra() + " - " + phieuKiemTra.getMaPhieuTiepNhan());
+                    setText(phieuKiemTra.getMaPhieuKiemTra() + " - "
+                            + bienSoTheoMaXe.getOrDefault(phieuKiemTra.getMaXe(), ""));
                 }
                 return this;
             }
@@ -648,6 +655,12 @@ public class FrmPhieuSuaChua extends JPanel {
     private void napDanhSachPhieuKiemTra() {
         try {
             List<PhieuKiemTra> danhSach = phieuKiemTraDAO.findAll();
+            Map<String, String> bienSoMoi = new HashMap<>();
+            for (Xe xe : xeDAO.findAll()) {
+                bienSoMoi.put(xe.getMaXe(), xe.getBienSo());
+            }
+            bienSoTheoMaXe.clear();
+            bienSoTheoMaXe.putAll(bienSoMoi);
             cboPhieuKiemTra.removeAll();
             for (PhieuKiemTra phieuKiemTra : danhSach) {
                 cboPhieuKiemTra.addItem(phieuKiemTra);
