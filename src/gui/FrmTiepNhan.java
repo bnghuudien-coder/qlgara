@@ -50,7 +50,7 @@ public class FrmTiepNhan extends JPanel {
     private final AppComboBox<Xe> cboXe = new AppComboBox<>();
     private final AppTextField txtMaKH = new AppTextField(16);
     private final AppTextField txtTenKhachHang = new AppTextField(18);
-    private final AppComboBox<NhanVien> cboNhanVien = new AppComboBox<>();
+    private final AppTextField txtNhanVien = new AppTextField(18);
     private final AppTextField txtNgayLap = new AppTextField(16);
     private final AppComboBox<String> cboTrangThai = new AppComboBox<>();
     private final JTextArea txaGhiChu = new JTextArea(3, 24);
@@ -71,7 +71,9 @@ public class FrmTiepNhan extends JPanel {
     private final TableRowSorter<DefaultTableModel> sorterTiepNhan =
             new TableRowSorter<>(modelTiepNhan);
     private final Map<String, KhachHang> khachHangTheoMa = new HashMap<>();
+    private final Map<String, NhanVien> nhanVienTheoMa = new HashMap<>();
     private final Map<String, PhieuTiepNhan> phieuTheoMa = new HashMap<>();
+    private NhanVien nhanVienDangNhap;
     private Timestamp ngayLapDangChon;
     private boolean dangCapNhatPhieu;
 
@@ -115,7 +117,7 @@ public class FrmTiepNhan extends JPanel {
         FormUI.addField(pnlFields, "Xe tiếp nhận *", cboXe, 2, 0);
         FormUI.addField(pnlFields, "Mã khách hàng", txtMaKH, 0, 1);
         FormUI.addField(pnlFields, "Tên khách hàng", txtTenKhachHang, 2, 1);
-        FormUI.addField(pnlFields, "Nhân viên tiếp nhận *", cboNhanVien, 0, 2);
+        FormUI.addField(pnlFields, "Nhân viên tiếp nhận *", txtNhanVien, 0, 2);
         FormUI.addField(pnlFields, "Ngày lập", txtNgayLap, 2, 2);
         FormUI.addField(pnlFields, "Trạng thái", cboTrangThai, 0, 3);
 
@@ -193,6 +195,8 @@ public class FrmTiepNhan extends JPanel {
         txtMaKH.setEditable(false);
         txtTenKhachHang.setEditable(false);
         txtNgayLap.setEditable(false);
+        txtNhanVien.setEditable(false);
+        txtNhanVien.setBackground(UIConfig.COLOR_BACKGROUND);
         cboTrangThai.setEditable(true);
         for (String trangThai : TRANG_THAI_MAC_DINH) {
             cboTrangThai.addItem(trangThai);
@@ -205,18 +209,6 @@ public class FrmTiepNhan extends JPanel {
                         list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Xe xe) {
                     lblItem.setText(xe.getBienSo() + " - " + xe.getHangXe() + " " + xe.getDongXe());
-                }
-                return lblItem;
-            }
-        });
-        cboNhanVien.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(
-                    JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                javax.swing.JLabel lblItem = (javax.swing.JLabel) super.getListCellRendererComponent(
-                        list, value, index, isSelected, cellHasFocus);
-                if (value instanceof NhanVien nhanVien) {
-                    lblItem.setText(nhanVien.getMaNV() + " - " + nhanVien.getHoTen());
                 }
                 return lblItem;
             }
@@ -242,10 +234,13 @@ public class FrmTiepNhan extends JPanel {
             for (Xe xe : danhSachXe) {
                 cboXe.addItem(xe);
             }
-            cboNhanVien.removeAllItems();
+            nhanVienTheoMa.clear();
             for (NhanVien nhanVien : danhSachNhanVien) {
-                cboNhanVien.addItem(nhanVien);
+                nhanVienTheoMa.put(nhanVien.getMaNV(), nhanVien);
             }
+            nhanVienDangNhap = timNhanVien(danhSachNhanVien,
+                    taiKhoanHienTai == null ? null : taiKhoanHienTai.getMaNV());
+            capNhatNhanVienDangNhap();
             khachHangTheoMa.clear();
             for (KhachHang khachHang : danhSachKhachHang) {
                 khachHangTheoMa.put(khachHang.getMaKH(), khachHang);
@@ -271,7 +266,7 @@ public class FrmTiepNhan extends JPanel {
             for (PhieuTiepNhan phieu : danhSach) {
                 Xe xe = timXe(phieu.getMaXe());
                 KhachHang khachHang = khachHangTheoMa.get(phieu.getMaKH());
-                NhanVien nhanVien = timNhanVien(phieu.getMaNV());
+                NhanVien nhanVien = nhanVienTheoMa.get(phieu.getMaNV());
                 phieuTheoMa.put(phieu.getMaPhieuTiepNhan(), phieu);
                 modelTiepNhan.addRow(new Object[] {
                         phieu.getMaPhieuTiepNhan(),
@@ -355,7 +350,7 @@ public class FrmTiepNhan extends JPanel {
     private PhieuTiepNhan docThongTinPhieu() {
         String maPhieu = txtMaPhieuTiepNhan.getText().trim();
         Xe xe = (Xe) cboXe.getSelectedItem();
-        NhanVien nhanVien = (NhanVien) cboNhanVien.getSelectedItem();
+        NhanVien nhanVien = nhanVienDangNhap;
         String trangThai = String.valueOf(cboTrangThai.getEditor().getItem()).trim();
 
         if (maPhieu.isEmpty()) {
@@ -368,7 +363,8 @@ public class FrmTiepNhan extends JPanel {
             throw new IllegalArgumentException("Hãy chọn xe cần tiếp nhận.");
         }
         if (nhanVien == null) {
-            throw new IllegalArgumentException("Hãy chọn nhân viên tiếp nhận.");
+            throw new IllegalArgumentException(
+                    "Không xác định được nhân viên đang đăng nhập. Hãy đăng nhập lại trước khi lập phiếu.");
         }
         if (trangThai.isEmpty()) {
             throw new IllegalArgumentException("Trạng thái tiếp nhận không được để trống.");
@@ -403,7 +399,7 @@ public class FrmTiepNhan extends JPanel {
 
         txtMaPhieuTiepNhan.setText(phieu.getMaPhieuTiepNhan());
         chonXe(phieu.getMaXe());
-        chonNhanVien(phieu.getMaNV());
+        capNhatNhanVienDangNhap();
         ngayLapDangChon = phieu.getNgayLap();
         txtNgayLap.setText(dinhDangNgay(ngayLapDangChon));
         chonTrangThai(phieu.getTrangThai());
@@ -428,7 +424,7 @@ public class FrmTiepNhan extends JPanel {
         } else {
             capNhatThongTinKhachHang();
         }
-        chonNhanVienDangNhap();
+        capNhatNhanVienDangNhap();
         ngayLapDangChon = Timestamp.valueOf(LocalDateTime.now());
         txtNgayLap.setText(dinhDangNgay(ngayLapDangChon));
         chonTrangThai(TRANG_THAI_MAC_DINH[0]);
@@ -446,29 +442,20 @@ public class FrmTiepNhan extends JPanel {
         }
     }
 
-    private void chonNhanVien(String maNV) {
-        for (int index = 0; index < cboNhanVien.getItemCount(); index++) {
-            if (cboNhanVien.getItemAt(index).getMaNV().equals(maNV)) {
-                cboNhanVien.setSelectedIndex(index);
-                return;
-            }
-        }
-    }
-
-    private NhanVien nhanVienDangNhap() {
-        if (taiKhoanHienTai == null || taiKhoanHienTai.getMaNV() == null) {
+    private NhanVien timNhanVien(List<NhanVien> danhSach, String maNV) {
+        if (maNV == null || maNV.isBlank()) {
             return null;
         }
-        return timNhanVien(taiKhoanHienTai.getMaNV().trim());
+        return danhSach.stream()
+                .filter(nhanVien -> maNV.trim().equals(nhanVien.getMaNV()))
+                .findFirst()
+                .orElse(null);
     }
 
-    private void chonNhanVienDangNhap() {
-        NhanVien nhanVien = nhanVienDangNhap();
-        if (nhanVien != null) {
-            chonNhanVien(nhanVien.getMaNV());
-        } else if (cboNhanVien.getItemCount() > 0) {
-            cboNhanVien.setSelectedIndex(0);
-        }
+    private void capNhatNhanVienDangNhap() {
+        txtNhanVien.setText(nhanVienDangNhap == null
+                ? "Không xác định nhân viên đăng nhập"
+                : nhanVienDangNhap.getMaNV() + " - " + nhanVienDangNhap.getHoTen());
     }
 
     private void chonTrangThai(String trangThai) {
@@ -494,16 +481,6 @@ public class FrmTiepNhan extends JPanel {
             Xe xe = cboXe.getItemAt(index);
             if (xe.getMaXe().equals(maXe)) {
                 return xe;
-            }
-        }
-        return null;
-    }
-
-    private NhanVien timNhanVien(String maNV) {
-        for (int index = 0; index < cboNhanVien.getItemCount(); index++) {
-            NhanVien nhanVien = cboNhanVien.getItemAt(index);
-            if (nhanVien.getMaNV().equals(maNV)) {
-                return nhanVien;
             }
         }
         return null;
