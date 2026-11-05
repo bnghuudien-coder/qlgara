@@ -1,9 +1,12 @@
 package dao;
 
-import connectDB.ConnectDB;
 import entity.LichLamViec;
+import entity.CaLamViec;
+import entity.NhanVien;
+import util.DatabaseConnection;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -15,9 +18,23 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class LichLamViecDAO extends BaseDAO<LichLamViec> {
-    public LichLamViecDAO() {
-        super(LichLamViec.class, "LichLamViec", "maLich");
+public class LichLamViecDAO {
+    public List<LichLamViec> findAll() throws SQLException {
+        String sql = "SELECT maLich, maCa, maNV, ngayLamViec, trangThai FROM LichLamViec ORDER BY ngayLamViec DESC";
+        List<LichLamViec> danhSach = new ArrayList<>();
+        try (Connection connection = moKetNoi();
+                PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                danhSach.add(new LichLamViec(
+                        resultSet.getString("maLich"),
+                        new CaLamViec(resultSet.getString("maCa")),
+                        new NhanVien(resultSet.getString("maNV")),
+                        resultSet.getDate("ngayLamViec"),
+                        resultSet.getString("trangThai")));
+            }
+        }
+        return danhSach;
     }
 
     public List<PhanCong> layPhanCong(LocalDate tuNgay, LocalDate denNgay) throws SQLException {
@@ -155,12 +172,7 @@ public class LichLamViecDAO extends BaseDAO<LichLamViec> {
     }
 
     private Connection moKetNoi() throws SQLException {
-        ConnectDB.getInstance().connect();
-        Connection connection = ConnectDB.getConnection();
-        if (connection == null) {
-            throw new SQLException("Không thể kết nối cơ sở dữ liệu.");
-        }
-        return connection;
+        return DatabaseConnection.open();
     }
 
     public record PhanCong(String maLich, String maCa, String maNV, String hoTen,

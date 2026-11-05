@@ -1,18 +1,17 @@
 package gui;
 
-import dao.PhieuYeuCauBaoHanhDAO;
+import controller.TiepNhanBaoHanhController;
 import dao.PhieuYeuCauBaoHanhDAO.LuaChonHoaDon;
 import dao.PhieuYeuCauBaoHanhDAO.LuaChonPhuTung;
 import dao.PhieuYeuCauBaoHanhDAO.YeuCauHienThi;
+import entity.HoaDon;
 import entity.PhieuYeuCauBaoHanh;
+import entity.PhuTung;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
@@ -29,7 +28,6 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     private static final DateTimeFormatter DINH_DANG_NGAY_GIO =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    private final PhieuYeuCauBaoHanhDAO phieuYeuCauBaoHanhDAO = new PhieuYeuCauBaoHanhDAO();
     private final AppTextField txtMaPhieuYCBH = new AppTextField(14);
     private final JComboBox<LuaChonHoaDon> cboHoaDon = new JComboBox<>();
     private final JComboBox<LuaChonPhuTung> cboPhuTung = new JComboBox<>();
@@ -38,11 +36,8 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     private final JTextArea txaLyDo = taoOThongTin();
     private final JTextArea txaGhiChuXuLy = taoOThongTin();
     private final AppTextField txtTimKiem = new AppTextField(20);
-    private final JLabel lblThongBao = new AppLabel("Yêu cầu chờ xử lý được ưu tiên hiển thị trước.", AppLabel.Style.MUTED);
-    private final List<YeuCauHienThi> dsYeuCau = new ArrayList<>();
-    private boolean dangNapHoaDon;
-    private boolean dangTaoMoi = true;
-    private boolean baoHanhConHan;
+    private final JLabel lblThongBao = new AppLabel(
+            "Yêu cầu chờ xử lý được ưu tiên hiển thị trước.", AppLabel.Style.MUTED);
     private final AppButton btnThem = new AppButton("Tiếp nhận");
     private final AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
     private final AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
@@ -50,6 +45,8 @@ public class FrmTiepNhanBaoHanh extends JPanel {
     private final AppButton btnHoanThanh = new AppButton("Hoàn thành", AppButton.Style.PRIMARY);
     private final AppButton btnTuChoi = new AppButton("Từ chối", AppButton.Style.DANGER);
     private final AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
+    private final AppButton btnTimKiem = new AppButton("Tìm kiếm");
+    private final AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
 
     private final DefaultTableModel modelYeuCau = new DefaultTableModel(
             new Object[] { "Mã yêu cầu", "Hóa đơn", "Phụ tùng", "Khách hàng", "SL", "Ngày tiếp nhận", "Trạng thái" },
@@ -60,6 +57,8 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         }
     };
     private final JTable tblYeuCau = FormUI.createTable(modelYeuCau);
+    private final TiepNhanBaoHanhController controller;
+    private boolean baoHanhConHan;
 
     public FrmTiepNhanBaoHanh() {
         setLayout(new BorderLayout());
@@ -67,7 +66,6 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         txtMaPhieuYCBH.setEditable(false);
         txtKetQuaBaoHanh.setEditable(false);
         txtKetQuaBaoHanh.setToolTipText("Kết quả tính theo ngày lập hóa đơn và thời hạn bảo hành");
-        taiMaYeuCauMoi();
         tblYeuCau.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tblYeuCau.setAutoCreateRowSorter(false);
 
@@ -79,27 +77,13 @@ public class FrmTiepNhanBaoHanh extends JPanel {
                 "Tiếp nhận, xử lý và theo dõi các yêu cầu bảo hành phụ tùng", pnlNoiDung),
                 BorderLayout.CENTER);
 
-        cboHoaDon.addActionListener(event -> {
-            if (!dangNapHoaDon) {
-                taiPhuTungTheoHoaDon();
-            }
-        });
-        cboPhuTung.addActionListener(event -> capNhatGioiHanSoLuong());
-        tblYeuCau.getSelectionModel().addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting() && tblYeuCau.getSelectedRow() >= 0) {
-                hienThiYeuCauDangChon();
-            }
-        });
-        txtTimKiem.addActionListener(event -> taiDanhSachYeuCau());
-        capNhatTrangThaiNut(false, false);
-        taiDanhSachHoaDon();
-        taiDanhSachYeuCau();
+        controller = new TiepNhanBaoHanhController(this);
+        controller.khoiTao();
     }
 
     private JPanel taoKhungThongTin() {
         AppPanel pnlCard = FormUI.createCard();
         pnlCard.add(FormUI.createSectionTitle("Thông tin yêu cầu bảo hành"), BorderLayout.NORTH);
-
         JPanel pnlNoiDung = new JPanel(new BorderLayout(12, 0));
         pnlNoiDung.setOpaque(false);
         pnlNoiDung.add(taoCacTruong(), BorderLayout.CENTER);
@@ -116,11 +100,12 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         FormUI.addField(pnlTruong, "Số lượng *", spnSoLuong, 2, 1);
         FormUI.addField(pnlTruong, "Lý do yêu cầu *", new AppScrollPane(txaLyDo), 0, 2);
         FormUI.addField(pnlTruong, "Kết quả bảo hành", txtKetQuaBaoHanh, 2, 2);
-
         JPanel pnlNoiDung = new JPanel(new BorderLayout(0, 10));
         pnlNoiDung.setOpaque(false);
         pnlNoiDung.add(pnlTruong, BorderLayout.CENTER);
-        pnlNoiDung.add(taoNutChucNang(), BorderLayout.SOUTH);
+        pnlNoiDung.add(FormUI.createButtonRow(
+                btnThem, btnCapNhat, btnXoa, btnChapNhan, btnHoanThanh, btnTuChoi, btnLamMoi),
+                BorderLayout.SOUTH);
         return pnlNoiDung;
     }
 
@@ -133,32 +118,12 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         return pnlGhiChu;
     }
 
-    private JPanel taoNutChucNang() {
-        btnThem.addActionListener(event -> themYeuCau());
-        btnCapNhat.addActionListener(event -> capNhatYeuCau());
-        btnXoa.addActionListener(event -> xoaYeuCau());
-        btnChapNhan.addActionListener(event -> chapNhanYeuCau());
-        btnHoanThanh.addActionListener(event -> hoanThanhYeuCau());
-        btnTuChoi.addActionListener(event -> tuChoiYeuCau());
-        btnLamMoi.addActionListener(event -> lamMoiForm());
-        return FormUI.createButtonRow(
-                btnThem, btnCapNhat, btnXoa, btnChapNhan, btnHoanThanh, btnTuChoi, btnLamMoi);
-    }
-
     private JPanel taoBangYeuCau() {
         AppPanel pnlBang = FormUI.createCard();
         JPanel pnlDau = new JPanel(new BorderLayout(10, 0));
         pnlDau.setOpaque(false);
         pnlDau.add(FormUI.createSectionTitle("Danh sách yêu cầu bảo hành"), BorderLayout.WEST);
         txtTimKiem.setToolTipText("Tìm mã yêu cầu, hóa đơn, phụ tùng, khách hàng hoặc trạng thái");
-        AppButton btnTimKiem = new AppButton("Tìm kiếm");
-        AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
-        btnTimKiem.addActionListener(event -> taiDanhSachYeuCau());
-        btnTaiLai.addActionListener(event -> {
-            txtTimKiem.setText("");
-            taiDanhSachHoaDon();
-            taiDanhSachYeuCau();
-        });
         JPanel pnlTimKiem = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         pnlTimKiem.setOpaque(false);
         pnlTimKiem.add(txtTimKiem);
@@ -171,329 +136,72 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         return pnlBang;
     }
 
-    private void taiDanhSachHoaDon() { // cho combobox
-        dangNapHoaDon = true;
+    public void hienThiDanhSachHoaDon(List<LuaChonHoaDon> danhSach) {
         cboHoaDon.removeAllItems();
+        for (LuaChonHoaDon hoaDon : danhSach) {
+            cboHoaDon.addItem(hoaDon);
+        }
+    }
+
+    public void hienThiDanhSachPhuTung(List<LuaChonPhuTung> danhSach) {
         cboPhuTung.removeAllItems();
-        try {
-            for (LuaChonHoaDon hoaDon : phieuYeuCauBaoHanhDAO.layHoaDonCoBaoHanh()) {
-                cboHoaDon.addItem(hoaDon);
-            }
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải hóa đơn có phụ tùng được bảo hành", exception);
-        } finally {
-            dangNapHoaDon = false;
-        }
-        taiPhuTungTheoHoaDon();
-    }
-
-    private void taiPhuTungTheoHoaDon() { // cho combobox
-        cboPhuTung.removeAllItems();
-        LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
-        if (hoaDon == null) {
-            capNhatGioiHanSoLuong();
-            return;
-        }
-        try {
-            for (LuaChonPhuTung phuTung : phieuYeuCauBaoHanhDAO
-                    .layPhuTungTheoHoaDon(hoaDon.maHoaDon())) {
-                cboPhuTung.addItem(phuTung);
-            }
-            capNhatGioiHanSoLuong();
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải phụ tùng được bảo hành của hóa đơn", exception);
+        for (LuaChonPhuTung phuTung : danhSach) {
+            cboPhuTung.addItem(phuTung);
         }
     }
 
-    private void capNhatGioiHanSoLuong() { 
-        LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
-        int gioiHan = phuTung == null ? 1 : Math.max(1, phuTung.soLuongHoaDon());
-        spnSoLuong.setModel(new SpinnerNumberModel(1, 1, gioiHan, 1));
-        capNhatKetQuaBaoHanh();
-    }
-
-    // Cập nhật kết quả bảo hành dựa trên hóa đơn và phụ tùng được chọn
-    private void capNhatKetQuaBaoHanh() {
-        LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
-        LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
-        baoHanhConHan = false;
-
-        if (hoaDon == null || phuTung == null) {
-            txtKetQuaBaoHanh.setText("Chọn hóa đơn và phụ tùng");
-            txtKetQuaBaoHanh.setForeground(UIConfig.COLOR_MUTED);
-        } else if (hoaDon.ngayLap() == null || phuTung.thoiHanBaoHanh() <= 0) {
-            txtKetQuaBaoHanh.setText("Không có dữ liệu thời hạn bảo hành");
-            txtKetQuaBaoHanh.setForeground(UIConfig.COLOR_DANGER);
-        } else {
-            LocalDate ngayHetHan = hoaDon.ngayLap().toLocalDateTime().toLocalDate();
-            ngayHetHan = switch (phuTung.donViThoiGian()) {
-                case "NGAY" -> ngayHetHan.plusDays(phuTung.thoiHanBaoHanh());
-                case "NAM" -> ngayHetHan.plusYears(phuTung.thoiHanBaoHanh());
-                default -> ngayHetHan.plusMonths(phuTung.thoiHanBaoHanh());
-            };
-            baoHanhConHan = !LocalDate.now().isAfter(ngayHetHan);
-            txtKetQuaBaoHanh.setText((baoHanhConHan ? "Còn hạn đến " : "Đã hết hạn từ ")
-                    + ngayHetHan.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")));
-            txtKetQuaBaoHanh.setForeground(
-                    baoHanhConHan ? UIConfig.COLOR_SUCCESS : UIConfig.COLOR_DANGER);
-        }
-        btnThem.setEnabled(dangTaoMoi && baoHanhConHan);
-    }
-
-    // hiển thị danh sách yêu cầu bảo hành trong bảng
-    private void taiDanhSachYeuCau() {
+    public void hienThiDanhSachYeuCau(List<YeuCauHienThi> danhSach) {
         modelYeuCau.setRowCount(0);
-        dsYeuCau.clear();
-        try {
-            dsYeuCau.addAll(phieuYeuCauBaoHanhDAO.timKiem(txtTimKiem.getText()));
-            for (YeuCauHienThi yeuCau : dsYeuCau) {
-                modelYeuCau.addRow(new Object[] {
-                        yeuCau.maPhieuYCBH(),
-                        yeuCau.maHoaDon(),
-                        yeuCau.maPhuTung() + " - " + yeuCau.tenPhuTung(),
-                        yeuCau.tenKhachHang(),
-                        yeuCau.soLuong(),
-                        dinhDangNgay(yeuCau.ngayTiepNhan()),
-                        yeuCau.trangThai()
-                });
-            }
-            lblThongBao.setText("Thứ tự: Chờ xử lý → Chấp nhận bảo hành → Hoàn thành bảo hành → Từ chối bảo hành.");
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải danh sách yêu cầu bảo hành", exception);
+        for (YeuCauHienThi yeuCau : danhSach) {
+            modelYeuCau.addRow(new Object[] {
+                    yeuCau.maPhieuYCBH(),
+                    yeuCau.maHoaDon(),
+                    yeuCau.maPhuTung() + " - " + yeuCau.tenPhuTung(),
+                    yeuCau.tenKhachHang(),
+                    yeuCau.soLuong(),
+                    dinhDangNgay(yeuCau.ngayTiepNhan()),
+                    yeuCau.trangThai()
+            });
         }
+        lblThongBao.setText(
+                "Thứ tự: Chờ xử lý → Chấp nhận bảo hành → Hoàn thành bảo hành → Từ chối bảo hành.");
     }
 
-    private void hienThiYeuCauDangChon() { // lấy yêu cầu đang chọn và set thông tin lên form
-        int row = tblYeuCau.getSelectedRow();
-        if (row < 0 || row >= dsYeuCau.size()) {
-            return;
-        }
-        YeuCauHienThi yeuCau = dsYeuCau.get(row);
-        dangTaoMoi = false;
+    public void hienThiYeuCau(YeuCauHienThi yeuCau, LuaChonPhuTung phuTung,
+            boolean choXuLy, boolean daChapNhan) {
         txtMaPhieuYCBH.setText(yeuCau.maPhieuYCBH());
-        chonHoaDonHienTai(yeuCau);
-        LuaChonPhuTung selectedPart = null;
-        for (int i = 0; i < cboPhuTung.getItemCount(); i++) {
-            if (cboPhuTung.getItemAt(i).maPhuTung().equals(yeuCau.maPhuTung())) {
-                selectedPart = cboPhuTung.getItemAt(i);
-                break;
-            }
+        cboHoaDon.setEnabled(false);
+        if (phuTung != null) {
+            cboPhuTung.setSelectedItem(phuTung);
         }
-        if (selectedPart == null) {
-            selectedPart = new LuaChonPhuTung(
-                    yeuCau.maPhuTung(), yeuCau.tenPhuTung(), yeuCau.soLuong(), 0, "");
-            cboPhuTung.addItem(selectedPart);
-        }
-        cboPhuTung.setSelectedItem(selectedPart);
         spnSoLuong.setValue(Math.max(1, yeuCau.soLuong()));
         txaLyDo.setText(yeuCau.lyDo() == null ? "" : yeuCau.lyDo());
         txaGhiChuXuLy.setText(yeuCau.ghiChuXuLy() == null ? "" : yeuCau.ghiChuXuLy());
-        boolean choXuLy = PhieuYeuCauBaoHanhDAO.CHO_XU_LY.equals(yeuCau.trangThai());
-        boolean daChapNhan = PhieuYeuCauBaoHanhDAO.CHAP_NHAN.equals(yeuCau.trangThai());
-        cboHoaDon.setEnabled(false);
         cboPhuTung.setEnabled(false);
         spnSoLuong.setEnabled(choXuLy);
         txaLyDo.setEditable(choXuLy);
         lblThongBao.setText("Trạng thái: " + yeuCau.trangThai()
                 + (yeuCau.ngayXuLy() == null ? "" : " | Xử lý: " + dinhDangNgay(yeuCau.ngayXuLy()))
-                + (yeuCau.ngayHoanThanh() == null ? "" : " | Hoàn thành: " + dinhDangNgay(yeuCau.ngayHoanThanh())));
-        capNhatTrangThaiNut(choXuLy, daChapNhan);
+                + (yeuCau.ngayHoanThanh() == null
+                        ? "" : " | Hoàn thành: " + dinhDangNgay(yeuCau.ngayHoanThanh())));
+        capNhatTrangThaiNut(false, choXuLy, daChapNhan);
     }
 
-    // lấy hóa đơn hiện tại của yêu cầu đang chọn set lên lại cbb 
-    private void chonHoaDonHienTai(YeuCauHienThi yeuCau) {
-        for (int i = 0; i < cboHoaDon.getItemCount(); i++) {
-            if (cboHoaDon.getItemAt(i).maHoaDon().equals(yeuCau.maHoaDon())) {
-                cboHoaDon.setSelectedIndex(i);
-                return;
-            }
-        }
+    public void hienThiKetQuaBaoHanh(String noiDung, boolean conHan) {
+        baoHanhConHan = conHan;
+        txtKetQuaBaoHanh.setText(noiDung);
+        txtKetQuaBaoHanh.setForeground(conHan
+                ? UIConfig.COLOR_SUCCESS
+                : noiDung.startsWith("Chọn hóa đơn") ? UIConfig.COLOR_MUTED : UIConfig.COLOR_DANGER);
     }
 
-    private void themYeuCau() {
-        LuaChonHoaDon hoaDon = (LuaChonHoaDon) cboHoaDon.getSelectedItem();
-        LuaChonPhuTung phuTung = (LuaChonPhuTung) cboPhuTung.getSelectedItem();
-        if (hoaDon == null || phuTung == null) {
-            thongBao("Vui lòng chọn hóa đơn và phụ tùng còn hạn bảo hành.", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (!baoHanhConHan) {
-            thongBao("Phụ tùng đã hết hạn hoặc không xác định được thời hạn bảo hành nên không thể lập phiếu.",
-                    JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (txaLyDo.getText().isBlank()) {
-            thongBao("Vui lòng nhập lý do yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
-            txaLyDo.requestFocusInWindow();
-            return;
-        }
-        PhieuYeuCauBaoHanh yeuCau = taoYeuCau();
-        yeuCau.setMaHoaDon(hoaDon.maHoaDon());
-        yeuCau.setMaPhuTung(phuTung.maPhuTung());
-        try {
-            phieuYeuCauBaoHanhDAO.them(yeuCau);
-            txtTimKiem.setText("");
-            taiDanhSachYeuCau();
-            chonYeuCau(yeuCau.getMaPhieuYCBH());
-            thongBao("Đã tiếp nhận yêu cầu " + yeuCau.getMaPhieuYCBH()
-                    + " với trạng thái Chờ xử lý.", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi("Không thể tiếp nhận yêu cầu bảo hành", exception);
-        }
+    public void capNhatGioiHanSoLuong(int gioiHan) {
+        spnSoLuong.setModel(new SpinnerNumberModel(1, 1, gioiHan, 1));
     }
 
-    private void capNhatYeuCau() {
-        YeuCauHienThi yeuCauDangChon = layYeuCauDangChon();
-        if (yeuCauDangChon == null) {
-            return;
-        }
-        if (!PhieuYeuCauBaoHanhDAO.CHO_XU_LY.equals(yeuCauDangChon.trangThai())) {
-            thongBao("Chỉ có thể cập nhật yêu cầu đang chờ xử lý.", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (txaLyDo.getText().isBlank()) {
-            thongBao("Vui lòng nhập lý do yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
-            txaLyDo.requestFocusInWindow();
-            return;
-        }
-        PhieuYeuCauBaoHanh yeuCau = taoYeuCau();
-        yeuCau.setMaPhieuYCBH(yeuCauDangChon.maPhieuYCBH());
-        try {
-            phieuYeuCauBaoHanhDAO.capNhatChoXuLy(yeuCau);
-            taiDanhSachYeuCau();
-            chonYeuCau(yeuCau.getMaPhieuYCBH());
-            thongBao("Đã cập nhật yêu cầu bảo hành.", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi("Không thể cập nhật yêu cầu bảo hành", exception);
-        }
-    }
-
-    private void xoaYeuCau() {
-        YeuCauHienThi yeuCau = layYeuCauDangChon();
-        if (yeuCau == null) {
-            return;
-        }
-        if (!PhieuYeuCauBaoHanhDAO.CHO_XU_LY.equals(yeuCau.trangThai())) {
-            thongBao("Chỉ có thể xóa yêu cầu đang chờ xử lý.", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        int luaChon = JOptionPane.showConfirmDialog(this,
-                "Xóa yêu cầu " + yeuCau.maPhieuYCBH() + "?",
-                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-        try {
-            if (!phieuYeuCauBaoHanhDAO.xoaChoXuLy(yeuCau.maPhieuYCBH())) {
-                throw new SQLException("Yêu cầu đã được xử lý hoặc không còn tồn tại.");
-            }
-            lamMoiForm();
-            taiDanhSachYeuCau();
-        } catch (SQLException exception) {
-            baoLoi("Không thể xóa yêu cầu bảo hành", exception);
-        }
-    }
-
-    private void chapNhanYeuCau() {
-        YeuCauHienThi yeuCau = layYeuCauDangChon();
-        if (yeuCau == null || !xacNhanTrangThai(yeuCau, PhieuYeuCauBaoHanhDAO.CHO_XU_LY,
-                "Chấp nhận yêu cầu này? Số lượng phụ tùng sẽ được cộng vào tồn kho.")) {
-            return;
-        }
-        try {
-            phieuYeuCauBaoHanhDAO.chapNhan(yeuCau.maPhieuYCBH(), txaGhiChuXuLy.getText().trim());
-            taiDanhSachYeuCau();
-            chonYeuCau(yeuCau.maPhieuYCBH());
-            thongBao("Đã chấp nhận bảo hành và cập nhật tồn kho.", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi("Không thể chấp nhận yêu cầu bảo hành", exception);
-        }
-    }
-
-    private void tuChoiYeuCau() {
-        YeuCauHienThi yeuCau = layYeuCauDangChon();
-        if (yeuCau == null || !xacNhanTrangThai(
-                yeuCau, PhieuYeuCauBaoHanhDAO.CHO_XU_LY, "Từ chối yêu cầu bảo hành này?")) {
-            return;
-        }
-        if (txaGhiChuXuLy.getText().isBlank()) {
-            thongBao("Vui lòng ghi lý do từ chối trong phần Ghi chú xử lý.", JOptionPane.WARNING_MESSAGE);
-            txaGhiChuXuLy.requestFocusInWindow();
-            return;
-        }
-        try {
-            phieuYeuCauBaoHanhDAO.tuChoi(yeuCau.maPhieuYCBH(), txaGhiChuXuLy.getText().trim());
-            taiDanhSachYeuCau();
-            chonYeuCau(yeuCau.maPhieuYCBH());
-            thongBao("Đã từ chối yêu cầu bảo hành.", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi("Không thể từ chối yêu cầu bảo hành", exception);
-        }
-    }
-
-    private void hoanThanhYeuCau() {
-        YeuCauHienThi yeuCau = layYeuCauDangChon();
-        if (yeuCau == null || !xacNhanTrangThai(yeuCau, PhieuYeuCauBaoHanhDAO.CHAP_NHAN,
-                "Đánh dấu yêu cầu này đã hoàn thành bảo hành?")) {
-            return;
-        }
-        if (txaGhiChuXuLy.getText().isBlank()) {
-            thongBao("Vui lòng nhập ghi chú kết quả bảo hành.", JOptionPane.WARNING_MESSAGE);
-            txaGhiChuXuLy.requestFocusInWindow();
-            return;
-        }
-        try {
-            phieuYeuCauBaoHanhDAO.hoanThanh(yeuCau.maPhieuYCBH(), txaGhiChuXuLy.getText().trim());
-            taiDanhSachYeuCau();
-            chonYeuCau(yeuCau.maPhieuYCBH());
-            thongBao("Đã hoàn thành yêu cầu bảo hành.", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi("Không thể hoàn thành yêu cầu bảo hành", exception);
-        }
-    }
-
-    private boolean xacNhanTrangThai(YeuCauHienThi yeuCau, String trangThaiCanCo, String loiNhac) {
-        if (!trangThaiCanCo.equals(yeuCau.trangThai())) {
-            thongBao("Yêu cầu không ở trạng thái phù hợp để thực hiện thao tác này.",
-                    JOptionPane.WARNING_MESSAGE);
-            return false;
-        }
-        return JOptionPane.showConfirmDialog(this, loiNhac, "Xác nhận",
-                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
-    }
-
-    private PhieuYeuCauBaoHanh taoYeuCau() {
-        PhieuYeuCauBaoHanh yeuCau = new PhieuYeuCauBaoHanh();
-        yeuCau.setSoLuong((Integer) spnSoLuong.getValue());
-        yeuCau.setLyDo(txaLyDo.getText().trim());
-        yeuCau.setGhiChuXuLy(txaGhiChuXuLy.getText().trim());
-        return yeuCau;
-    }
-
-    private YeuCauHienThi layYeuCauDangChon() {
-        int row = tblYeuCau.getSelectedRow();
-        if (row < 0 || row >= dsYeuCau.size()) {
-            thongBao("Vui lòng chọn một yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
-            return null;
-        }
-        return dsYeuCau.get(row);
-    }
-
-    // tô màu và cuộn đến yêu cầu bảo hành vừa được thêm hoặc cập nhật
-    private void chonYeuCau(String maPhieuYCBH) {
-        for (int row = 0; row < dsYeuCau.size(); row++) {
-            if (maPhieuYCBH.equals(dsYeuCau.get(row).maPhieuYCBH())) {
-                tblYeuCau.setRowSelectionInterval(row, row);
-                tblYeuCau.scrollRectToVisible(tblYeuCau.getCellRect(row, 0, true));
-                return;
-            }
-        }
-    }
-
-    private void lamMoiForm() {
+    public void lamMoiBieuMau(String maMoi) {
         tblYeuCau.clearSelection();
-        dangTaoMoi = true;
-        taiMaYeuCauMoi();
+        txtMaPhieuYCBH.setText(maMoi);
         cboHoaDon.setEnabled(true);
         cboPhuTung.setEnabled(true);
         spnSoLuong.setEnabled(true);
@@ -501,11 +209,11 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         spnSoLuong.setValue(1);
         txaLyDo.setText("");
         txaGhiChuXuLy.setText("");
-        capNhatTrangThaiNut(false, false);
-        taiDanhSachHoaDon();
+        hienThiKetQuaBaoHanh("Chọn hóa đơn và phụ tùng", false);
+        capNhatTrangThaiNut(true, false, false);
     }
 
-    private void capNhatTrangThaiNut(boolean choXuLy, boolean daChapNhan) {
+    public void capNhatTrangThaiNut(boolean dangTaoMoi, boolean choXuLy, boolean daChapNhan) {
         btnThem.setEnabled(dangTaoMoi && baoHanhConHan);
         btnCapNhat.setEnabled(choXuLy);
         btnXoa.setEnabled(choXuLy);
@@ -514,12 +222,154 @@ public class FrmTiepNhanBaoHanh extends JPanel {
         btnHoanThanh.setEnabled(daChapNhan);
     }
 
-    private void taiMaYeuCauMoi() {
-        try {
-            txtMaPhieuYCBH.setText(phieuYeuCauBaoHanhDAO.layMaTiepTheo());
-        } catch (SQLException exception) {
-            txtMaPhieuYCBH.setText("");
-            baoLoi("Không thể tạo mã yêu cầu bảo hành", exception);
+    public LuaChonHoaDon getHoaDonDuocChon() {
+        return (LuaChonHoaDon) cboHoaDon.getSelectedItem();
+    }
+
+    public LuaChonPhuTung getPhuTungDuocChon() {
+        return (LuaChonPhuTung) cboPhuTung.getSelectedItem();
+    }
+
+    public int getDongDangChon() {
+        return tblYeuCau.getSelectedRow();
+    }
+
+    public String getTuKhoa() {
+        return txtTimKiem.getText();
+    }
+
+    public void xoaTuKhoa() {
+        txtTimKiem.setText("");
+    }
+
+    public String getMaYeuCauMoi() {
+        return txtMaPhieuYCBH.getText().trim();
+    }
+
+    public String getLyDoNhap() {
+        return txaLyDo.getText().trim();
+    }
+
+    public String getGhiChuXuLyNhap() {
+        return txaGhiChuXuLy.getText().trim();
+    }
+
+    public PhieuYeuCauBaoHanh taoYeuCauNhap(String maPhieuYCBH) {
+        LuaChonHoaDon hoaDon = getHoaDonDuocChon();
+        LuaChonPhuTung phuTung = getPhuTungDuocChon();
+        HoaDon hoaDonEntity = null;
+        if (hoaDon != null) {
+            hoaDonEntity = new HoaDon();
+            hoaDonEntity.setMaHoaDon(hoaDon.maHoaDon());
+        }
+        PhuTung phuTungEntity = null;
+        if (phuTung != null) {
+            phuTungEntity = new PhuTung();
+            phuTungEntity.setMaPhuTung(phuTung.maPhuTung());
+        }
+        return new PhieuYeuCauBaoHanh(maPhieuYCBH, hoaDonEntity, phuTungEntity,
+                (Integer) spnSoLuong.getValue(), null, null, txaLyDo.getText().trim(),
+                txaGhiChuXuLy.getText().trim(), null, null);
+    }
+
+    public boolean kiemTraThem(boolean baoHanhConHan) {
+        if (getHoaDonDuocChon() == null || getPhuTungDuocChon() == null) {
+            thongBao("Vui lòng chọn hóa đơn và phụ tùng còn hạn bảo hành.", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        if (!baoHanhConHan) {
+            thongBao("Phụ tùng đã hết hạn hoặc không xác định được thời hạn bảo hành nên không thể lập phiếu.",
+                    JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        return kiemTraLyDo();
+    }
+
+    public boolean kiemTraLyDo() {
+        if (!txaLyDo.getText().isBlank()) {
+            return true;
+        }
+        thongBao("Vui lòng nhập lý do yêu cầu bảo hành.", JOptionPane.WARNING_MESSAGE);
+        txaLyDo.requestFocusInWindow();
+        return false;
+    }
+
+    public boolean kiemTraGhiChu(String loiNhac) {
+        if (!txaGhiChuXuLy.getText().isBlank()) {
+            return true;
+        }
+        thongBao(loiNhac, JOptionPane.WARNING_MESSAGE);
+        txaGhiChuXuLy.requestFocusInWindow();
+        return false;
+    }
+
+    public boolean xacNhanXoa(String maPhieuYCBH) {
+        return JOptionPane.showConfirmDialog(this, "Xóa yêu cầu " + maPhieuYCBH + "?",
+                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE)
+                == JOptionPane.YES_OPTION;
+    }
+
+    public boolean xacNhan(String loiNhac) {
+        return JOptionPane.showConfirmDialog(this, loiNhac, "Xác nhận",
+                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    public void thongBao(String noiDung, int loai) {
+        JOptionPane.showMessageDialog(this, noiDung, "Yêu cầu bảo hành", loai);
+    }
+
+    public void baoLoi(String tieuDe, Exception exception) {
+        JOptionPane.showMessageDialog(this, tieuDe + ":\n" + exception.getMessage(),
+                "Lỗi", JOptionPane.ERROR_MESSAGE);
+    }
+
+    public void hienThiLoi(String noiDung) {
+        thongBao(noiDung, JOptionPane.WARNING_MESSAGE);
+    }
+
+    public AppButton getBtnThem() { return btnThem; }
+    public AppButton getBtnCapNhat() { return btnCapNhat; }
+    public AppButton getBtnXoa() { return btnXoa; }
+    public AppButton getBtnChapNhan() { return btnChapNhan; }
+    public AppButton getBtnHoanThanh() { return btnHoanThanh; }
+    public AppButton getBtnTuChoi() { return btnTuChoi; }
+    public AppButton getBtnLamMoi() { return btnLamMoi; }
+    public AppButton getBtnTimKiem() { return btnTimKiem; }
+    public AppButton getBtnTaiLai() { return btnTaiLai; }
+    public JComboBox<LuaChonHoaDon> getCboHoaDon() { return cboHoaDon; }
+    public JComboBox<LuaChonPhuTung> getCboPhuTung() { return cboPhuTung; }
+    public AppTextField getTxtTimKiem() { return txtTimKiem; }
+    public JTable getTblYeuCau() { return tblYeuCau; }
+
+    public void chonHoaDon(String maHoaDon) {
+        for (int i = 0; i < cboHoaDon.getItemCount(); i++) {
+            if (maHoaDon.equals(cboHoaDon.getItemAt(i).maHoaDon())) {
+                cboHoaDon.setSelectedIndex(i);
+                return;
+            }
+        }
+    }
+
+    public LuaChonPhuTung timPhuTung(String maPhuTung) {
+        for (int i = 0; i < cboPhuTung.getItemCount(); i++) {
+            if (maPhuTung.equals(cboPhuTung.getItemAt(i).maPhuTung())) {
+                return cboPhuTung.getItemAt(i);
+            }
+        }
+        return null;
+    }
+
+    public void themPhuTung(LuaChonPhuTung phuTung) {
+        cboPhuTung.addItem(phuTung);
+    }
+
+    public void chonYeuCau(String maPhieuYCBH) {
+        for (int row = 0; row < modelYeuCau.getRowCount(); row++) {
+            if (maPhieuYCBH.equals(modelYeuCau.getValueAt(row, 0))) {
+                tblYeuCau.setRowSelectionInterval(row, row);
+                tblYeuCau.scrollRectToVisible(tblYeuCau.getCellRect(row, 0, true));
+                return;
+            }
         }
     }
 
@@ -533,14 +383,5 @@ public class FrmTiepNhanBaoHanh extends JPanel {
 
     private static String dinhDangNgay(Timestamp ngay) {
         return ngay == null ? "" : ngay.toLocalDateTime().format(DINH_DANG_NGAY_GIO);
-    }
-
-    private void thongBao(String noiDung, int loai) { 
-        JOptionPane.showMessageDialog(this, noiDung, "Yêu cầu bảo hành", loai);
-    }
-
-    private void baoLoi(String tieuDe, SQLException exception) {
-        JOptionPane.showMessageDialog(this, tieuDe + ":\n" + exception.getMessage(),
-                "Lỗi", JOptionPane.ERROR_MESSAGE);
     }
 }

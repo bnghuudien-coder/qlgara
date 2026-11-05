@@ -1,11 +1,12 @@
 package entity;
 
 import java.sql.Timestamp;
+import java.util.Objects;
 
 public class PhieuYeuCauBaoHanh {
     private String maPhieuYCBH;
-    private String maHoaDon;
-    private String maPhuTung;
+    private HoaDon hoaDon;
+    private PhuTung phuTung;
     private int soLuong;
     private Timestamp ngayTiepNhan;
     private String trangThai;
@@ -14,12 +15,34 @@ public class PhieuYeuCauBaoHanh {
     private Timestamp ngayXuLy;
     private Timestamp ngayHoanThanh;
 
+    public PhieuYeuCauBaoHanh() {
+    }
+
+    public PhieuYeuCauBaoHanh(String maPhieuYCBH) {
+        this.maPhieuYCBH = maPhieuYCBH;
+    }
+
+    public PhieuYeuCauBaoHanh(String maPhieuYCBH, HoaDon hoaDon, PhuTung phuTung, int soLuong,
+            Timestamp ngayTiepNhan, String trangThai, String lyDo, String ghiChuXuLy,
+            Timestamp ngayXuLy, Timestamp ngayHoanThanh) {
+        this.maPhieuYCBH = maPhieuYCBH;
+        this.hoaDon = hoaDon;
+        this.phuTung = phuTung;
+        this.soLuong = soLuong;
+        this.ngayTiepNhan = ngayTiepNhan;
+        this.trangThai = trangThai;
+        this.lyDo = lyDo;
+        this.ghiChuXuLy = ghiChuXuLy;
+        this.ngayXuLy = ngayXuLy;
+        this.ngayHoanThanh = ngayHoanThanh;
+    }
+
     public String getMaPhieuYCBH() { return maPhieuYCBH; }
     public void setMaPhieuYCBH(String maPhieuYCBH) { this.maPhieuYCBH = maPhieuYCBH; }
-    public String getMaHoaDon() { return maHoaDon; }
-    public void setMaHoaDon(String maHoaDon) { this.maHoaDon = maHoaDon; }
-    public String getMaPhuTung() { return maPhuTung; }
-    public void setMaPhuTung(String maPhuTung) { this.maPhuTung = maPhuTung; }
+    public HoaDon getHoaDon() { return hoaDon; }
+    public void setHoaDon(HoaDon hoaDon) { this.hoaDon = hoaDon; }
+    public PhuTung getPhuTung() { return phuTung; }
+    public void setPhuTung(PhuTung phuTung) { this.phuTung = phuTung; }
     public int getSoLuong() { return soLuong; }
     public void setSoLuong(int soLuong) { this.soLuong = soLuong; }
     public Timestamp getNgayTiepNhan() { return ngayTiepNhan; }
@@ -34,4 +57,21 @@ public class PhieuYeuCauBaoHanh {
     public void setNgayXuLy(Timestamp ngayXuLy) { this.ngayXuLy = ngayXuLy; }
     public Timestamp getNgayHoanThanh() { return ngayHoanThanh; }
     public void setNgayHoanThanh(Timestamp ngayHoanThanh) { this.ngayHoanThanh = ngayHoanThanh; }
+
+    @Override
+    public String toString() {
+        return maPhieuYCBH + " - " + trangThai;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof PhieuYeuCauBaoHanh other)) return false;
+        return maPhieuYCBH != null && maPhieuYCBH.equals(other.maPhieuYCBH);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(maPhieuYCBH);
+    }
 }

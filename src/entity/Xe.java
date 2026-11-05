@@ -14,6 +14,10 @@ public class Xe {
     public Xe() {
     }
 
+    public Xe(String maXe) {
+        this.maXe = maXe;
+    }
+
     // Constructor đầy đủ tham số
     public Xe(String maXe, String bienSo, String hangXe, String dongXe, Integer namSanXuat,
             String soKhung, String soMay, String maKH) {

@@ -207,7 +207,7 @@ public class FrmPhieuSuaChua extends JPanel {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof PhieuKiemTra phieuKiemTra) {
                     setText(phieuKiemTra.getMaPhieuKiemTra() + " - "
-                            + bienSoTheoMaXe.getOrDefault(phieuKiemTra.getMaXe(), ""));
+                            + bienSoTheoMaXe.getOrDefault(phieuKiemTra.getXe().getMaXe(), ""));
                 }
                 return this;
             }
@@ -221,10 +221,10 @@ public class FrmPhieuSuaChua extends JPanel {
                 txtMaNhanVien.setText("");
                 return;
             }
-            txtMaXe.setText(phieuKiemTra.getMaXe());
-            txtMaKhachHang.setText(phieuKiemTra.getMaKH());
+            txtMaXe.setText(phieuKiemTra.getXe().getMaXe());
+            txtMaKhachHang.setText(phieuKiemTra.getKhachHang().getMaKH());
             String maNV = maNhanVienDangNhap();
-            txtMaNhanVien.setText(maNV.isEmpty() ? phieuKiemTra.getMaNV() : maNV);
+            txtMaNhanVien.setText(maNV.isEmpty() ? phieuKiemTra.getNhanVien().getMaNV() : maNV);
         });
 
         napDanhSachPhieuSuaChua();
@@ -834,9 +834,10 @@ public class FrmPhieuSuaChua extends JPanel {
     }
 
     private String maNhanVienDangNhap() {
-        return taiKhoanHienTai == null || taiKhoanHienTai.getMaNV() == null
+        return taiKhoanHienTai == null || taiKhoanHienTai.getNhanVien() == null
+                || taiKhoanHienTai.getNhanVien().getMaNV() == null
                 ? ""
-                : taiKhoanHienTai.getMaNV().trim();
+                : taiKhoanHienTai.getNhanVien().getMaNV().trim();
     }
 
     private void hienThiDaChon() {

@@ -1,11 +1,13 @@
 package entity;
 
+import java.util.Objects;
+
 public class PhieuBanGiao {
     private String maPhieuBanGiao;
-    private String maXe;
-    private String maKH;
+    private Xe xe;
+    private KhachHang khachHang;
     private String tenKhachHang;
-    private String maNV;
+    private NhanVien nhanVien;
     private String tinhTrangXeHienTai;
     private String tenNguoiNhan;
     private String soDienThoaiNguoiNhan;
@@ -13,16 +15,32 @@ public class PhieuBanGiao {
     public PhieuBanGiao() {
     }
 
+    public PhieuBanGiao(String maPhieuBanGiao) {
+        this.maPhieuBanGiao = maPhieuBanGiao;
+    }
+
+    public PhieuBanGiao(String maPhieuBanGiao, Xe xe, KhachHang khachHang, String tenKhachHang,
+            NhanVien nhanVien, String tinhTrangXeHienTai, String tenNguoiNhan, String soDienThoaiNguoiNhan) {
+        this.maPhieuBanGiao = maPhieuBanGiao;
+        this.xe = xe;
+        this.khachHang = khachHang;
+        this.tenKhachHang = tenKhachHang;
+        this.nhanVien = nhanVien;
+        this.tinhTrangXeHienTai = tinhTrangXeHienTai;
+        this.tenNguoiNhan = tenNguoiNhan;
+        this.soDienThoaiNguoiNhan = soDienThoaiNguoiNhan;
+    }
+
     public String getMaPhieuBanGiao() { return maPhieuBanGiao; }
     public void setMaPhieuBanGiao(String maPhieuBanGiao) { this.maPhieuBanGiao = maPhieuBanGiao; }
-    public String getMaXe() { return maXe; }
-    public void setMaXe(String maXe) { this.maXe = maXe; }
-    public String getMaKH() { return maKH; }
-    public void setMaKH(String maKH) { this.maKH = maKH; }
+    public Xe getXe() { return xe; }
+    public void setXe(Xe xe) { this.xe = xe; }
+    public KhachHang getKhachHang() { return khachHang; }
+    public void setKhachHang(KhachHang khachHang) { this.khachHang = khachHang; }
     public String getTenKhachHang() { return tenKhachHang; }
     public void setTenKhachHang(String tenKhachHang) { this.tenKhachHang = tenKhachHang; }
-    public String getMaNV() { return maNV; }
-    public void setMaNV(String maNV) { this.maNV = maNV; }
+    public NhanVien getNhanVien() { return nhanVien; }
+    public void setNhanVien(NhanVien nhanVien) { this.nhanVien = nhanVien; }
     public String getTinhTrangXeHienTai() { return tinhTrangXeHienTai; }
     public void setTinhTrangXeHienTai(String tinhTrangXeHienTai) { this.tinhTrangXeHienTai = tinhTrangXeHienTai; }
     public String getTenNguoiNhan() { return tenNguoiNhan; }
@@ -30,5 +48,22 @@ public class PhieuBanGiao {
     public String getSoDienThoaiNguoiNhan() { return soDienThoaiNguoiNhan; }
     public void setSoDienThoaiNguoiNhan(String soDienThoaiNguoiNhan) {
         this.soDienThoaiNguoiNhan = soDienThoaiNguoiNhan;
+    }
+
+    @Override
+    public String toString() {
+        return maPhieuBanGiao + " - " + tenKhachHang;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof PhieuBanGiao other)) return false;
+        return maPhieuBanGiao != null && maPhieuBanGiao.equals(other.maPhieuBanGiao);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(maPhieuBanGiao);
     }
 }

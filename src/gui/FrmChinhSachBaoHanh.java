@@ -1,13 +1,12 @@
 package gui;
 
-import dao.ChinhSachBaoHanhDAO;
+import controller.ChinhSachBaoHanhController;
 import entity.ChinhSachBaoHanh;
 import entity.PhuTung;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,13 +14,13 @@ import java.util.Set;
 import javax.swing.BorderFactory;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
+import javax.swing.JButton;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 
 public class FrmChinhSachBaoHanh extends JPanel {
@@ -32,7 +31,7 @@ public class FrmChinhSachBaoHanh extends JPanel {
         }
     }
 
-    private final ChinhSachBaoHanhDAO chinhSachBaoHanhDAO = new ChinhSachBaoHanhDAO();
+    private final ChinhSachBaoHanhController controller;
     private final AppTextField txtMaCSBH = new AppTextField(12);
     private final AppTextField txtTenChinhSach = new AppTextField(24);
     private final javax.swing.JSpinner spnThoiHan = new javax.swing.JSpinner(
@@ -48,6 +47,11 @@ public class FrmChinhSachBaoHanh extends JPanel {
     private final JTextArea txaNoiDungBaoHanh = taoOThongTin();
     private final AppTextField txtTimPhuTung = new AppTextField(16);
     private final AppTextField txtTimChinhSach = new AppTextField(18);
+    private final AppButton btnThem = new AppButton("Thêm");
+    private final AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
+    private final AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
+    private final AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
+    private final AppButton btnTimKiem = new AppButton("Tìm kiếm");
     private final Set<String> dsMaPhuTungDangChon = new LinkedHashSet<>();
     private final List<PhuTung> dsPhuTung = new ArrayList<>();
     private boolean dangNapBangPhuTung;
@@ -92,34 +96,8 @@ public class FrmChinhSachBaoHanh extends JPanel {
                 "Quản lý thời hạn, điều kiện và phụ tùng được áp dụng bảo hành", pnlNoiDung),
                 BorderLayout.CENTER);
 
-        tblPhuTung.getModel().addTableModelListener(event -> {
-            if (!dangNapBangPhuTung && event.getType() == javax.swing.event.TableModelEvent.UPDATE
-                    && event.getColumn() == 0 && event.getFirstRow() >= 0) {
-                int row = event.getFirstRow();
-                String maPhuTung = String.valueOf(modelPhuTung.getValueAt(row, 1));
-                if (Boolean.TRUE.equals(modelPhuTung.getValueAt(row, 0))) {
-                    dsMaPhuTungDangChon.add(maPhuTung);
-                } else {
-                    dsMaPhuTungDangChon.remove(maPhuTung);
-                }
-            }
-        });
-        tblChinhSach.getSelectionModel().addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting() && tblChinhSach.getSelectedRow() >= 0) {
-                hienThiChinhSachDangChon();
-            }
-        });
-        txtTimPhuTung.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) { hienThiDanhSachPhuTung(); }
-            @Override
-            public void removeUpdate(DocumentEvent event) { hienThiDanhSachPhuTung(); }
-            @Override
-            public void changedUpdate(DocumentEvent event) { hienThiDanhSachPhuTung(); }
-        });
-        txtTimChinhSach.addActionListener(event -> taiDanhSachChinhSach());
-
-        taiDuLieuBanDau();
+        controller = new ChinhSachBaoHanhController(this);
+        controller.taiDuLieuBanDau();
     }
 
     private JPanel taoKhungChinhSach() {
@@ -156,14 +134,6 @@ public class FrmChinhSachBaoHanh extends JPanel {
         pnlMoTa.add(taoTruongMoTa("Trường hợp từ chối", txaTruongHopTuChoi));
         pnlThongTin.add(pnlMoTa, BorderLayout.CENTER);
 
-        AppButton btnThem = new AppButton("Thêm");
-        AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
-        AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
-        AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
-        btnThem.addActionListener(event -> luuChinhSach(true));
-        btnCapNhat.addActionListener(event -> luuChinhSach(false));
-        btnXoa.addActionListener(event -> xoaChinhSach());
-        btnLamMoi.addActionListener(event -> lamMoiForm());
         JPanel pnlNut = FormUI.createButtonRow(btnThem, btnCapNhat, btnXoa, btnLamMoi);
         pnlThongTin.add(pnlNut, BorderLayout.SOUTH);
         return pnlThongTin;
@@ -198,8 +168,6 @@ public class FrmChinhSachBaoHanh extends JPanel {
         pnlThanhTimKiem.setOpaque(false);
         pnlThanhTimKiem.add(FormUI.createSectionTitle("Danh sách chính sách"), BorderLayout.WEST);
         txtTimChinhSach.setToolTipText("Tìm theo mã, tên, nội dung hoặc điều kiện bảo hành");
-        AppButton btnTimKiem = new AppButton("Tìm kiếm");
-        btnTimKiem.addActionListener(event -> taiDanhSachChinhSach());
         JPanel pnlTimKiem = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         pnlTimKiem.setOpaque(false);
         pnlTimKiem.add(txtTimChinhSach);
@@ -210,20 +178,17 @@ public class FrmChinhSachBaoHanh extends JPanel {
         return pnlBang;
     }
 
-    private void taiDuLieuBanDau() {
-        try {
-            dsPhuTung.clear();
-            dsPhuTung.addAll(chinhSachBaoHanhDAO.layDanhSachPhuTung());
-            txtMaCSBH.setText(chinhSachBaoHanhDAO.layMaTiepTheo());
-            hienThiDanhSachPhuTung();
-            taiDanhSachChinhSach();
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải dữ liệu chính sách bảo hành", exception);
-            txtMaCSBH.setText("");
-        }
+    public void hienThiMaChinhSach(String maCSBH) {
+        txtMaCSBH.setText(maCSBH);
     }
 
-    private void hienThiDanhSachPhuTung() {
+    public void hienThiDanhSachPhuTung(List<PhuTung> dsPhuTung) {
+        this.dsPhuTung.clear();
+        this.dsPhuTung.addAll(dsPhuTung);
+        locDanhSachPhuTung();
+    }
+
+    public void locDanhSachPhuTung() {
         String tuKhoa = txtTimPhuTung.getText().trim().toLowerCase(java.util.Locale.ROOT);
         dangNapBangPhuTung = true;
         modelPhuTung.setRowCount(0);
@@ -242,130 +207,88 @@ public class FrmChinhSachBaoHanh extends JPanel {
         dangNapBangPhuTung = false;
     }
 
-    private void taiDanhSachChinhSach() {
-        try {
-            modelChinhSach.setRowCount(0);
-            for (ChinhSachBaoHanh chinhSach : chinhSachBaoHanhDAO.timKiem(txtTimChinhSach.getText())) {
-                modelChinhSach.addRow(new Object[] {
-                        chinhSach.getMaCSBH(),
-                        chinhSach.getTenChinhSach(),
-                        hienThiThoiHan(chinhSach.getThoiHanBaoHanh(), chinhSach.getDonViThoiGian()),
-                        chinhSach.getDsMaPhuTung().size(),
-                        chinhSach.isTrangThai() ? "Đang áp dụng" : "Ngưng áp dụng",
-                        chinhSach.getNgayTao() == null ? "" : chinhSach.getNgayTao().toLocalDateTime()
-                                .toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                });
-            }
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải danh sách chính sách bảo hành", exception);
+    public void hienThiDanhSachChinhSach(List<ChinhSachBaoHanh> dsChinhSach) {
+        modelChinhSach.setRowCount(0);
+        for (ChinhSachBaoHanh chinhSach : dsChinhSach) {
+            modelChinhSach.addRow(new Object[] {
+                    chinhSach.getMaCSBH(),
+                    chinhSach.getTenChinhSach(),
+                    hienThiThoiHan(chinhSach.getThoiHanBaoHanh(), chinhSach.getDonViThoiGian()),
+                    chinhSach.getDsPhuTung().size(),
+                    chinhSach.isTrangThai() ? "Đang áp dụng" : "Ngưng áp dụng",
+                    chinhSach.getNgayTao() == null ? "" : chinhSach.getNgayTao().toLocalDateTime()
+                            .toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+            });
         }
     }
 
-    private void hienThiChinhSachDangChon() {
-        String maCSBH = String.valueOf(modelChinhSach.getValueAt(tblChinhSach.getSelectedRow(), 0));
-        try {
-            for (ChinhSachBaoHanh chinhSach : chinhSachBaoHanhDAO.timKiem(maCSBH)) {
-                if (!maCSBH.equals(chinhSach.getMaCSBH())) {
-                    continue;
-                }
-                dangThemMoi = false;
-                txtMaCSBH.setText(chinhSach.getMaCSBH());
-                txtTenChinhSach.setText(chinhSach.getTenChinhSach());
-                spnThoiHan.setValue(chinhSach.getThoiHanBaoHanh());
-                chonDonViThoiGian(chinhSach.getDonViThoiGian());
-                txaDieuKien.setText(chinhSach.getDieuKienBaoHanh());
-                txaTruongHopTuChoi.setText(chinhSach.getTruongHopTuChoi());
-                txaNoiDungBaoHanh.setText(chinhSach.getNoiDungBaoHanh());
-                chkTrangThai.setSelected(chinhSach.isTrangThai());
-                dsMaPhuTungDangChon.clear();
-                dsMaPhuTungDangChon.addAll(chinhSach.getDsMaPhuTung());
-                hienThiDanhSachPhuTung();
-                return;
-            }
-        } catch (SQLException exception) {
-            baoLoi("Không thể tải thông tin chính sách", exception);
+    public void hienThiChinhSach(ChinhSachBaoHanh chinhSach) {
+        dangThemMoi = false;
+        txtMaCSBH.setText(chinhSach.getMaCSBH());
+        txtTenChinhSach.setText(chinhSach.getTenChinhSach());
+        spnThoiHan.setValue(chinhSach.getThoiHanBaoHanh());
+        chonDonViThoiGian(chinhSach.getDonViThoiGian());
+        txaDieuKien.setText(chinhSach.getDieuKienBaoHanh());
+        txaTruongHopTuChoi.setText(chinhSach.getTruongHopTuChoi());
+        txaNoiDungBaoHanh.setText(chinhSach.getNoiDungBaoHanh());
+        chkTrangThai.setSelected(chinhSach.isTrangThai());
+        dsMaPhuTungDangChon.clear();
+        for (PhuTung phuTung : chinhSach.getDsPhuTung()) {
+            dsMaPhuTungDangChon.add(phuTung.getMaPhuTung());
         }
+        locDanhSachPhuTung();
     }
 
-    private void luuChinhSach(boolean themMoi) {
+    public ChinhSachBaoHanh layChinhSachNhap() {
         String maCSBH = txtMaCSBH.getText().trim();
-        if (!themMoi && maCSBH.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn chính sách cần cập nhật.",
-                    "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
         if (txtTenChinhSach.getText().isBlank()) {
             JOptionPane.showMessageDialog(this, "Tên chính sách không được để trống.",
                     "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
             txtTenChinhSach.requestFocusInWindow();
-            return;
+            return null;
         }
         if (dsMaPhuTungDangChon.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Vui lòng chọn ít nhất một phụ tùng áp dụng.",
                     "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-            return;
+            return null;
         }
 
         DonViThoiGian donVi = (DonViThoiGian) cboDonViThoiGian.getSelectedItem();
-        ChinhSachBaoHanh chinhSach = new ChinhSachBaoHanh();
-        chinhSach.setMaCSBH(maCSBH);
-        chinhSach.setTenChinhSach(txtTenChinhSach.getText().trim());
-        chinhSach.setThoiHanBaoHanh((Integer) spnThoiHan.getValue());
-        chinhSach.setDonViThoiGian(donVi.ma());
-        chinhSach.setDieuKienBaoHanh(txaDieuKien.getText().trim());
-        chinhSach.setTruongHopTuChoi(txaTruongHopTuChoi.getText().trim());
-        chinhSach.setNoiDungBaoHanh(txaNoiDungBaoHanh.getText().trim());
-        chinhSach.setTrangThai(chkTrangThai.isSelected());
-        chinhSach.setDsMaPhuTung(new ArrayList<>(dsMaPhuTungDangChon));
+        return new ChinhSachBaoHanh(
+                maCSBH,
+                txtTenChinhSach.getText().trim(),
+                (Integer) spnThoiHan.getValue(),
+                donVi.ma(),
+                txaDieuKien.getText().trim(),
+                txaTruongHopTuChoi.getText().trim(),
+                txaNoiDungBaoHanh.getText().trim(),
+                null,
+                chkTrangThai.isSelected(),
+                dsPhuTung.stream()
+                        .filter(phuTung -> dsMaPhuTungDangChon.contains(phuTung.getMaPhuTung()))
+                        .toList());
+    }
 
-        try {
-            chinhSachBaoHanhDAO.luu(chinhSach, themMoi);
-            dangThemMoi = false;
-            txtTimChinhSach.setText("");
-            taiDanhSachChinhSach();
-            chonChinhSach(chinhSach.getMaCSBH());
-            JOptionPane.showMessageDialog(this,
-                    (themMoi ? "Đã thêm" : "Đã cập nhật") + " chính sách " + chinhSach.getMaCSBH() + ".",
-                    "Thành công", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            baoLoi(themMoi ? "Không thể thêm chính sách bảo hành" : "Không thể cập nhật chính sách bảo hành",
-                    exception);
+    public void capNhatPhuTungDuocChon(int row) {
+        if (dangNapBangPhuTung || row >= modelPhuTung.getRowCount()) {
+            return;
+        }
+        String maPhuTung = String.valueOf(modelPhuTung.getValueAt(row, 1));
+        if (Boolean.TRUE.equals(modelPhuTung.getValueAt(row, 0))) {
+            dsMaPhuTungDangChon.add(maPhuTung);
+        } else {
+            dsMaPhuTungDangChon.remove(maPhuTung);
         }
     }
 
-    private void xoaChinhSach() {
-        String maCSBH = txtMaCSBH.getText().trim();
-        if (dangThemMoi || maCSBH.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn chính sách cần xóa.",
-                    "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        int luaChon = JOptionPane.showConfirmDialog(this,
-                "Bạn có chắc muốn xóa chính sách " + maCSBH + "?",
-                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-        try {
-            if (!chinhSachBaoHanhDAO.xoa(maCSBH)) {
-                throw new SQLException("Không tìm thấy chính sách cần xóa: " + maCSBH);
-            }
-            lamMoiForm();
-            taiDanhSachChinhSach();
-        } catch (SQLException exception) {
-            baoLoi("Không thể xóa chính sách bảo hành", exception);
-        }
+    public void datTrangThaiThemMoi(boolean themMoi) {
+        dangThemMoi = themMoi;
     }
 
-    private void lamMoiForm() {
+    public void lamMoiForm(String maCSBH) {
         tblChinhSach.clearSelection();
         dangThemMoi = true;
-        try {
-            txtMaCSBH.setText(chinhSachBaoHanhDAO.layMaTiepTheo());
-        } catch (SQLException exception) {
-            baoLoi("Không thể tạo mã chính sách bảo hành", exception);
-            txtMaCSBH.setText("");
-        }
+        txtMaCSBH.setText(maCSBH);
         txtTenChinhSach.setText("");
         spnThoiHan.setValue(12);
         cboDonViThoiGian.setSelectedIndex(0);
@@ -374,10 +297,10 @@ public class FrmChinhSachBaoHanh extends JPanel {
         txaNoiDungBaoHanh.setText("");
         chkTrangThai.setSelected(true);
         dsMaPhuTungDangChon.clear();
-        hienThiDanhSachPhuTung();
+        locDanhSachPhuTung();
     }
 
-    private void chonChinhSach(String maCSBH) {
+    public void chonChinhSach(String maCSBH) {
         for (int row = 0; row < modelChinhSach.getRowCount(); row++) {
             if (maCSBH.equals(modelChinhSach.getValueAt(row, 0))) {
                 tblChinhSach.setRowSelectionInterval(row, row);
@@ -385,6 +308,78 @@ public class FrmChinhSachBaoHanh extends JPanel {
                 return;
             }
         }
+    }
+
+    public String layMaChinhSachDangChon() {
+        int row = tblChinhSach.getSelectedRow();
+        return row < 0 ? null : String.valueOf(modelChinhSach.getValueAt(row, 0));
+    }
+
+    public String layMaChinhSachNhap() {
+        return txtMaCSBH.getText().trim();
+    }
+
+    public String layTuKhoaChinhSach() {
+        return txtTimChinhSach.getText();
+    }
+
+    public boolean laThemMoi() {
+        return dangThemMoi;
+    }
+
+    public void xoaTuKhoaChinhSach() {
+        txtTimChinhSach.setText("");
+    }
+
+    public boolean xacNhanXoa(String maCSBH) {
+        int luaChon = JOptionPane.showConfirmDialog(this,
+                "Bạn có chắc muốn xóa chính sách " + maCSBH + "?",
+                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        return luaChon == JOptionPane.YES_OPTION;
+    }
+
+    public void thongBaoCanhBao(String tieuDe, String noiDung) {
+        JOptionPane.showMessageDialog(this, noiDung, tieuDe, JOptionPane.WARNING_MESSAGE);
+    }
+
+    public void thongBaoThanhCong(String noiDung) {
+        JOptionPane.showMessageDialog(this, noiDung, "Thành công", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    public JButton layNutThem() {
+        return btnThem;
+    }
+
+    public JButton layNutCapNhat() {
+        return btnCapNhat;
+    }
+
+    public JButton layNutXoa() {
+        return btnXoa;
+    }
+
+    public JButton layNutLamMoi() {
+        return btnLamMoi;
+    }
+
+    public JButton layNutTimKiem() {
+        return btnTimKiem;
+    }
+
+    public JTextField layOTimChinhSach() {
+        return txtTimChinhSach;
+    }
+
+    public JTextField layOTimPhuTung() {
+        return txtTimPhuTung;
+    }
+
+    public JTable layBangChinhSach() {
+        return tblChinhSach;
+    }
+
+    public JTable layBangPhuTung() {
+        return tblPhuTung;
     }
 
     private void chonDonViThoiGian(String maDonVi) {
@@ -414,8 +409,8 @@ public class FrmChinhSachBaoHanh extends JPanel {
         return txa;
     }
 
-    private void baoLoi(String tieuDe, SQLException exception) {
-        JOptionPane.showMessageDialog(this, tieuDe + ":\n" + exception.getMessage(),
+    public void baoLoi(String tieuDe, String noiDung) {
+        JOptionPane.showMessageDialog(this, tieuDe + ":\n" + noiDung,
                 "Lỗi", JOptionPane.ERROR_MESSAGE);
     }
 }

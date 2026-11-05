@@ -361,7 +361,7 @@ public class FrmNhapXuatPhuTung extends JPanel {
         if (taiKhoanHienTai != null) {
             String tenHienThi = (taiKhoanHienTai.getHoTenNhanVien() != null && !taiKhoanHienTai.getHoTenNhanVien().trim().isEmpty()) 
                     ? taiKhoanHienTai.getHoTenNhanVien() 
-                    : taiKhoanHienTai.getMaNV();
+                    : taiKhoanHienTai.getNhanVien().getMaNV();
             txtNguoiLap.setText(tenHienThi);
         } else {
             txtNguoiLap.setText("Chưa đăng nhập");
@@ -648,7 +648,9 @@ public class FrmNhapXuatPhuTung extends JPanel {
     }
 
     private void thucHienLuuGiaoDich(boolean isNhap, boolean batBuocTaoMoi) {
-        if (taiKhoanHienTai == null || taiKhoanHienTai.getMaNV() == null || taiKhoanHienTai.getMaNV().trim().isEmpty()) {
+        if (taiKhoanHienTai == null || taiKhoanHienTai.getNhanVien() == null
+                || taiKhoanHienTai.getNhanVien().getMaNV() == null
+                || taiKhoanHienTai.getNhanVien().getMaNV().trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "Không tìm thấy phiên đăng nhập hiện tại! Vui lòng đăng nhập lại.", "Lỗi phân quyền", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -680,7 +682,7 @@ public class FrmNhapXuatPhuTung extends JPanel {
 
         PhieuNhapXuatKho phieu = new PhieuNhapXuatKho();
         phieu.setMaPhieuNhapXuat(maPhieu);
-        phieu.setMaNV(taiKhoanHienTai.getMaNV().trim());
+        phieu.setMaNV(taiKhoanHienTai.getNhanVien().getMaNV().trim());
         phieu.setNgayLapPhieu(new java.sql.Timestamp(System.currentTimeMillis()));
         phieu.setKieuPhieu(isNhap ? "Nhập" : "Xuất");
 

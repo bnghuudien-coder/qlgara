@@ -3,6 +3,7 @@ package entity;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class ChinhSachBaoHanh {
     private String maCSBH;
@@ -14,7 +15,34 @@ public class ChinhSachBaoHanh {
     private String noiDungBaoHanh;
     private Timestamp ngayTao;
     private boolean trangThai;
-    private List<String> dsMaPhuTung = new ArrayList<>();
+    private List<PhuTung> dsPhuTung = new ArrayList<>();
+
+    public ChinhSachBaoHanh() {
+    }
+
+    public ChinhSachBaoHanh(String maCSBH, String tenChinhSach, int thoiHanBaoHanh, String donViThoiGian, String dieuKienBaoHanh, String truongHopTuChoi, String noiDungBaoHanh) {
+        this.maCSBH = maCSBH;
+        this.tenChinhSach = tenChinhSach;
+        this.thoiHanBaoHanh = thoiHanBaoHanh;
+        this.donViThoiGian = donViThoiGian;
+        this.dieuKienBaoHanh = dieuKienBaoHanh;
+        this.truongHopTuChoi = truongHopTuChoi;
+        this.noiDungBaoHanh = noiDungBaoHanh;
+    }
+
+    public ChinhSachBaoHanh(String maCSBH) {
+        this.maCSBH = maCSBH;
+    }
+
+    public ChinhSachBaoHanh(String maCSBH, String tenChinhSach, int thoiHanBaoHanh, String donViThoiGian,
+            String dieuKienBaoHanh, String truongHopTuChoi, String noiDungBaoHanh,
+            Timestamp ngayTao, boolean trangThai, List<PhuTung> dsPhuTung) {
+        this(maCSBH, tenChinhSach, thoiHanBaoHanh, donViThoiGian,
+                dieuKienBaoHanh, truongHopTuChoi, noiDungBaoHanh);
+        this.ngayTao = ngayTao;
+        this.trangThai = trangThai;
+        setDsPhuTung(dsPhuTung);
+    }
 
     public String getMaCSBH() { return maCSBH; }
     public void setMaCSBH(String maCSBH) { this.maCSBH = maCSBH; }
@@ -34,8 +62,25 @@ public class ChinhSachBaoHanh {
     public void setNgayTao(Timestamp ngayTao) { this.ngayTao = ngayTao; }
     public boolean isTrangThai() { return trangThai; }
     public void setTrangThai(boolean trangThai) { this.trangThai = trangThai; }
-    public List<String> getDsMaPhuTung() { return new ArrayList<>(dsMaPhuTung); }
-    public void setDsMaPhuTung(List<String> dsMaPhuTung) {
-        this.dsMaPhuTung = dsMaPhuTung == null ? new ArrayList<>() : new ArrayList<>(dsMaPhuTung);
+    public List<PhuTung> getDsPhuTung() { return new ArrayList<>(dsPhuTung); }
+    public void setDsPhuTung(List<PhuTung> dsPhuTung) {
+        this.dsPhuTung = dsPhuTung == null ? new ArrayList<>() : new ArrayList<>(dsPhuTung);
+    }
+
+    @Override
+    public String toString() {
+        return maCSBH + " - " + tenChinhSach;
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) return true;
+        if (!(object instanceof ChinhSachBaoHanh other)) return false;
+        return maCSBH != null && maCSBH.equals(other.maCSBH);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(maCSBH);
     }
 }

@@ -20,3 +20,7 @@ Nếu không muốn xóa database hiện có, không chạy script tạo lại �
 Các bảng chính sách bảo hành và phiếu yêu cầu bảo hành chỉ được tạo trong script khởi tạo database mới; nếu đang dùng database cũ, hãy tạo lại database và nạp lại dữ liệu mẫu để sử dụng đầy đủ các chức năng này.
 
 Các ràng buộc `NOT NULL` mới cũng chỉ áp dụng khi khởi tạo schema mới. Để tạo lại toàn bộ database `a1`, chạy `QuanLyGaraOto.sql` rồi `DuLieuMau.sql` theo đúng thứ tự.
+
+## Cấu hình kết nối cho các DAO đã tách khỏi `BaseDAO`/`ConnectDB`
+
+Các DAO `CaLamViecDAO`, `ChinhSachBaoHanhDAO`, `PhieuYeuCauBaoHanhDAO`, `NhanVienDAO`, `LichLamViecDAO`, `KhachHangDAO`, `PhieuTiepNhanDAO`, `PhieuKiemTraDAO`, `TaiKhoanDAO` và `PhieuBanGiaoDAO` mở kết nối riêng cho từng thao tác, không dùng `BaseDAO` hoặc kết nối dùng chung. Cấu hình nằm trong `database.properties` ở thư mục gốc; file này được Git bỏ qua để thông tin đăng nhập không bị commit. Nếu cần cấu hình lại, sao chép `database.properties.example` thành `database.properties` rồi nhập đúng URL, user và mật khẩu SQL Server. Các biến môi trường `GARA_DB_URL`, `GARA_DB_USER`, `GARA_DB_PASSWORD` hoặc Java system properties tương ứng vẫn được ưu tiên nếu đã thiết lập.

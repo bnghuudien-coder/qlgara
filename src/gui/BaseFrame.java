@@ -149,7 +149,8 @@ public class BaseFrame extends JFrame {
 			FrmHoaDon frmHoaDon = new FrmHoaDon();
 			if (taiKhoanDangNhap != null) {
 				frmHoaDon.setNhanVienLapHoaDon(
-						taiKhoanDangNhap.getMaNV(),
+						taiKhoanDangNhap.getNhanVien() == null ? null
+								: taiKhoanDangNhap.getNhanVien().getMaNV(),
 						taiKhoanDangNhap.getHoTenNhanVien());
 			}
 			setContent(frmHoaDon);
