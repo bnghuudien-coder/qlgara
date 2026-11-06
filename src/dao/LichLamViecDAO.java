@@ -1,11 +1,8 @@
 package dao;
 
-import entity.LichLamViec;
 import entity.CaLamViec;
+import entity.LichLamViec;
 import entity.NhanVien;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -174,16 +171,10 @@ public class LichLamViecDAO {
     }
 
     private Connection moKetNoi() throws SQLException {
-        java.util.Properties properties = new java.util.Properties();
-        try (var reader = Files.newBufferedReader(Path.of("database.properties"))) {
-            properties.load(reader);
-        } catch (IOException exception) {
-            throw new SQLException("Không đọc được cấu hình database.properties.", exception);
-        }
-        return DriverManager.getConnection(
-                properties.getProperty("url"),
-                properties.getProperty("user"),
-                properties.getProperty("password"));
+        String url = "jdbc:sqlserver://localhost:1433;databaseName=a1;encrypt=true;trustServerCertificate=true;";
+        String user = "sa";
+        String password = "123456";
+        return DriverManager.getConnection(url, user, password);
     }
 
     public record PhanCong(String maLich, String maCa, String maNV, String hoTen,

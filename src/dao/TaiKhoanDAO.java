@@ -1,10 +1,7 @@
 package dao;
 
-import entity.TaiKhoan;
 import entity.NhanVien;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import entity.TaiKhoan;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -114,15 +111,9 @@ public class TaiKhoanDAO {
     }
 
     private Connection moKetNoi() throws SQLException {
-        java.util.Properties properties = new java.util.Properties();
-        try (var reader = Files.newBufferedReader(Path.of("database.properties"))) {
-            properties.load(reader);
-        } catch (IOException exception) {
-            throw new SQLException("Không đọc được cấu hình database.properties.", exception);
-        }
-        return DriverManager.getConnection(
-                properties.getProperty("url"),
-                properties.getProperty("user"),
-                properties.getProperty("password"));
+        String url = "jdbc:sqlserver://localhost:1433;databaseName=a1;encrypt=true;trustServerCertificate=true;";
+        String user = "sa";
+        String password = "123456";
+        return DriverManager.getConnection(url, user, password);
     }
 }
