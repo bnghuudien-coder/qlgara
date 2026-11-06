@@ -11,7 +11,6 @@ import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
-import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +35,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
-import dao.DichVuDAO;
+import controller.DichVuController;
 import entity.DichVu;
-import util.MaTuDong;
 
 public class FrmDichVu extends JPanel {
     private static final Color PALE_BLUE = new Color(242, 247, 255);
@@ -67,8 +65,9 @@ public class FrmDichVu extends JPanel {
     private JButton btnAdd = new JButton();
     private JButton btnUpdate = new JButton();
     private JButton btnDel = new JButton();
+    private JButton btnReset = new JButton();
+    private AppButton btnTaiLai;
 
-    private final DichVuDAO dichVuDao = new DichVuDAO();
     private final DecimalFormat df = new DecimalFormat("#,### VNĐ");
 
     private final TableRowSorter<DefaultTableModel> sortedDichVu = new TableRowSorter<>(modelDichVu);
@@ -99,7 +98,7 @@ public class FrmDichVu extends JPanel {
                 hienThiDichVuDaChon();
             }
         });
-        napDanhSachDichVu();
+        new DichVuController(this).taiDuLieuBanDau();
     }
 
     private JPanel createHeading() {
@@ -152,25 +151,21 @@ public class FrmDichVu extends JPanel {
                 new Color(0x33cc33),
                 new Color(0xffffff));
 
-        btnAdd.addActionListener(e -> themDichVu());
         btnUpdate = createButton(
                 "Cập nhật",
                 new ImageIcon(getClass().getResource("/resources/icons/update.png")),
                 new Color(0x3366cc),
                 new Color(0xffffff));
-        btnUpdate.addActionListener(e -> capNhatDichVu());
         btnDel = createButton(
                 "Xóa",
                 new ImageIcon(getClass().getResource("/resources/icons/trash.png")),
                 new Color(0xff0033),
                 new Color(0xffffff));
-        btnDel.addActionListener(e -> xoaDichVu());
-        JButton btnReset = createButton(
+        btnReset = createButton(
                 "Làm mới",
                 new ImageIcon(getClass().getResource("/resources/icons/reset.png")),
                 new Color(0x555555),
                 new Color(0xffffff));
-        btnReset.addActionListener(e -> lamMoiForm());
         pnlButtons.add(btnAdd, buttonConstraints(0));
         pnlButtons.add(btnUpdate, buttonConstraints(1));
         pnlButtons.add(btnDel, buttonConstraints(2));
@@ -202,12 +197,7 @@ public class FrmDichVu extends JPanel {
         pnlLoc.setOpaque(false);
         pnlLoc.add(createSearchField("Mã dịch vụ", txtLocMaDichVu));
         pnlLoc.add(createSearchField("Tên dịch vụ", txtLocTenDichVu));
-        AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
-        btnTaiLai.addActionListener(e -> {
-            txtLocMaDichVu.setText("");
-            txtLocTenDichVu.setText("");
-            napDanhSachDichVu();
-        });
+        btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
         pnlSearch.add(pnlLoc, BorderLayout.CENTER);
         pnlSearch.add(btnTaiLai, BorderLayout.EAST);
         themBoLangNghe(txtLocMaDichVu);
@@ -334,17 +324,7 @@ public class FrmDichVu extends JPanel {
         return pnlCard;
     }
 
-    private void napDanhSachDichVu() {
-        try {
-            hienThiDanhSach(dichVuDao.findAll());
-            txtMaDichVu.setText(phatSinhMaDV());
-            lblThongBao.setText("Đã tải " + modelDichVu.getRowCount() + " dịch vụ");
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách dịch vụ: " + e.getMessage());
-        }
-    }
-
-    private void hienThiDanhSach(List<DichVu> danhSachDichVu) {
+    public void hienThiDanhSach(List<DichVu> danhSachDichVu) {
         modelDichVu.setRowCount(0);
         for (DichVu dichVu : danhSachDichVu) {
             modelDichVu.addRow(new Object[] {
@@ -356,13 +336,13 @@ public class FrmDichVu extends JPanel {
         }
     }
 
-    private void hienThiLoi(String message) {
+    public void hienThiLoi(String message) {
         lblThongBao.setText(message);
         lblThongBao.setForeground(new Color(190, 55, 55));
         JOptionPane.showMessageDialog(this, message, "Quản lý dịch vụ", JOptionPane.ERROR_MESSAGE);
     }
 
-    private DichVu docThongTinDichVu() {
+    public DichVu layDichVuNhap() {
         String maDV = txtMaDichVu.getText().trim();
         String tenDV = txtTenDichVu.getText().trim();
         String giaDVText = txtGiaTien.getText().trim();
@@ -398,69 +378,8 @@ public class FrmDichVu extends JPanel {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private void themDichVu() {
-        try {
-            DichVu dichVu = docThongTinDichVu();
-            if (dichVuDao.insert(dichVu)) {
-                napDanhSachDichVu();
-                lamMoiForm();
-                lblThongBao.setText("Đã thêm dịch vụ " + dichVu.getMaDV());
-            }
-        } catch (IllegalArgumentException e) {
-            hienThiLoi(e.getMessage());
-        } catch (SQLException e) {
-            hienThiLoi("Không thể thêm dịch vụ: " + e.getMessage());
-        }
-    }
-
-    private void capNhatDichVu() {
-        try {
-            DichVu dichVu = docThongTinDichVu();
-            if (dichVuDao.update(dichVu)) {
-                napDanhSachDichVu();
-                lblThongBao.setText("Đã cập nhật dịch vụ " + dichVu.getMaDV());
-            } else {
-                hienThiLoi("Không tìm thấy dịch vụ cần cập nhật");
-            }
-        } catch (IllegalArgumentException e) {
-            hienThiLoi(e.getMessage());
-        } catch (SQLException e) {
-            hienThiLoi("Không thể cập nhật dịch vụ: " + e.getMessage());
-        }
-    }
-
-    private void xoaDichVu() {
-        String maDV = txtMaDichVu.getText().trim();
-        if (maDV == null || maDV.isEmpty()) {
-            hienThiLoi("Mã dịch vụ không được để trống");
-            return;
-        }
-
-        int luaChon = JOptionPane.showConfirmDialog(
-                this,
-                "Bạn có chắc muốn xóa dịch vụ " + maDV + "?",
-                "Xác nhận xóa",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        try {
-            if (dichVuDao.deleteById(maDV)) {
-                napDanhSachDichVu();
-                lamMoiForm();
-                lblThongBao.setText("Đã xóa dịch vụ " + maDV);
-            } else {
-                hienThiLoi("Không tìm thấy dịch vụ cần xóa");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể xóa dịch vụ " + e.getMessage());
-        }
-    }
-
-    private void lamMoiForm() {
-        txtMaDichVu.setText(phatSinhMaDV());
+    public void lamMoiForm(String maMoi) {
+        txtMaDichVu.setText(maMoi);
         txtTenDichVu.setText("");
         txtGiaTien.setText("");
         txtMoTa.setText("");
@@ -494,14 +413,59 @@ public class FrmDichVu extends JPanel {
         return value == null ? "" : value.toString();
     }
 
-    private String phatSinhMaDV() {
-        List<String> danhSachMa = new ArrayList<>();
-        for (int i = 0; i < modelDichVu.getRowCount(); i++) {
-            danhSachMa.add(cellText(modelDichVu.getValueAt(i, 0)));
+    public JButton layNutThem() {
+        return btnAdd;
+    }
+
+    public JButton layNutCapNhat() {
+        return btnUpdate;
+    }
+
+    public JButton layNutXoa() {
+        return btnDel;
+    }
+
+    public JButton layNutLamMoi() {
+        return btnReset;
+    }
+
+    public JButton layNutTaiLai() {
+        return btnTaiLai;
+    }
+
+    public String layMaDichVuNhap() {
+        return txtMaDichVu.getText().trim();
+    }
+
+    public int soLuongDichVu() {
+        return modelDichVu.getRowCount();
+    }
+
+    public void xoaBoLoc() {
+        txtLocMaDichVu.setText("");
+        txtLocTenDichVu.setText("");
+    }
+
+    public void thongBao(String message) {
+        lblThongBao.setForeground(MUTED);
+        lblThongBao.setText(message);
+    }
+
+    public void thongBaoThanhCong(String message) {
+        lblThongBao.setForeground(new Color(38, 130, 75));
+        lblThongBao.setText(message);
+    }
+
+    public void baoLoi(String tieuDe, String chiTiet) {
+        hienThiLoi(chiTiet == null || chiTiet.isBlank() ? tieuDe : tieuDe + ": " + chiTiet);
+    }
+
+    public boolean xacNhanXoa(String maDV) {
+        if (maDV.isEmpty()) {
+            baoLoi("Mã dịch vụ không được để trống", null);
+            return false;
         }
-        return MaTuDong.sinhMa(
-                MaTuDong.TIEN_TO_DICH_VU,
-                danhSachMa,
-                ma -> ma);
+        return JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa dịch vụ " + maDV + "?",
+                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
     }
 }
