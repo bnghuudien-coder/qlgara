@@ -1,35 +1,32 @@
 package gui;
 
-import connectDB.ConnectDB;
+import controller.ThanhToanController;
 import dao.ThanhToanDAO;
+import entity.GiaoDichThanhToan;
 
 import javax.swing.*;
 import javax.swing.border.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.print.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.*;
+import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
 
+/**
+ * Chỉ chứa giao diện. Mọi sự kiện được gắn trong ThanhToanController,
+ * mọi truy vấn dữ liệu nằm trong ThanhToanDAO.
+ */
 public class FrmThanhToan extends JFrame {
     private static final String TEN_GARA = "AUTOGARA PRO";
     private static final String DIA_CHI_GARA = "Địa chỉ: 12 Nguyễn Văn Bảo, P.4, Q. Gò Vấp, TP. Hồ Chí Minh";
     private static final String LIEN_HE_GARA = "Điện thoại: 028 1234 5678  |  MST: 0312345678";
-    // Đúng theo các thuộc tính trong ThanhToanDAO.ThongTinHoaDon.
-    private static final String COT_MA_NV = "maNV";
-    private static final String BANG_PHIEU = "PhieuSuaChua";
-    private static final String COT_MA_PHIEU = "maPhieuSuaChua";
-    private static final String COT_MA_XE = "maXe";
     private static final Color BRAND = new Color(0x2150E8);
     private static final Color BLUE_DARK = new Color(0x1D4ED8);
     private static final Color TEXT = new Color(0x17233B);
@@ -47,20 +44,26 @@ public class FrmThanhToan extends JFrame {
     private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 14);
     private static final String CARD_TIEN_MAT = "TIEN_MAT";
     private static final String CARD_CHUYEN_KHOAN = "CHUYEN_KHOAN";
-    private static final String LOAI_DV = "DV";
 
-    private String maHoaDon;
-    private String maNhanVien = "";
-    private String maXe = "";
-    // HoaDon.soTien là tổng thanh toán sau VAT và sau giảm giá.
-    private BigDecimal tongTien = BigDecimal.ZERO;
-    private BigDecimal daThanhToan = BigDecimal.ZERO;
-    private BigDecimal tienDV = BigDecimal.ZERO;
-    private BigDecimal tienPT = BigDecimal.ZERO;
-    private BigDecimal tienThue = BigDecimal.ZERO;
-    private BigDecimal tienGiamGia = BigDecimal.ZERO;
-    private final List<ChiTiet> chiTietHD = new ArrayList<>();
+    // ===================== Dữ liệu truyền giữa Controller và View
+    // =====================
+    /** Số liệu cho khung "Tổng quan thanh toán". */
+    public static class TongQuan {
+        public boolean coHoaDon;
+        public BigDecimal tienDV = BigDecimal.ZERO, tienPT = BigDecimal.ZERO,
+                tongHoaDon = BigDecimal.ZERO, thue = BigDecimal.ZERO, giamGia = BigDecimal.ZERO,
+                tongThanhToan = BigDecimal.ZERO, daThanhToan = BigDecimal.ZERO, conNo = BigDecimal.ZERO;
+    }
 
+    /** Dữ liệu để dựng hóa đơn in. */
+    public static class DuLieuHoaDon {
+        public String maHoaDon, ngayLap, tenKhach, maKhach, maPhieu, phuongThuc, ngayIn, maXe, maNhanVien;
+        public List<ThanhToanDAO.ChiTiet> chiTiet;
+        public BigDecimal tienDV, tienPT, thue, giamGia, tongHoaDon, tongTien, daTraTruoc, lanNay, conLai;
+        public BigDecimal khachDua, tienThua;
+    }
+
+    // ===================== Component =====================
     private JTextField txtMaHoaDon, txtNgayLap, txtMaKhachHang, txtTenKhachHang;
     private JTextField txtMaPhieuSuaChua, txtMaNhanVien, txtTrangThaiHoaDon;
     private JLabel lblPill, lblTienDV, lblTienPT, lblTongHoaDon, lblThue, lblGiamGia;
@@ -77,10 +80,8 @@ public class FrmThanhToan extends JFrame {
     private final List<JButton> cacNutNhanh = new ArrayList<>();
     private DefaultListModel<String> modelLichSu;
     private JButton btnXacNhan, btnDong;
-    private final ThanhToanDAO thanhToanDAO = new ThanhToanDAO();
 
     public FrmThanhToan(String maHoaDon) {
-        this.maHoaDon = maHoaDon == null ? "" : maHoaDon.trim();
         setTitle("THANH TOÁN HÓA ĐƠN");
         Rectangle man = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
         setSize(Math.min(1180, man.width), Math.min(820, man.height));
@@ -88,10 +89,251 @@ public class FrmThanhToan extends JFrame {
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         khoiTaoGiaoDien();
-        ganSuKien();
-        taiHoaDonTuCSDL(this.maHoaDon);
+        // Controller gắn sự kiện và nạp dữ liệu.
+        new ThanhToanController(this, maHoaDon);
     }
 
+    // ===================== Getter cho Controller =====================
+    public JButton getBtnDong() {
+        return btnDong;
+    }
+
+    public JButton getBtnXacNhan() {
+        return btnXacNhan;
+    }
+
+    public JButton getBtnThanhToanDu() {
+        return btnThanhToanDu;
+    }
+
+    public JButton getBtnMotNua() {
+        return btnMotNua;
+    }
+
+    public JButton getBtnVuaDu() {
+        return btnVuaDu;
+    }
+
+    public JButton[] getBtnMenhGia() {
+        return btnMenhGia;
+    }
+
+    public JToggleButton getBtnTienMat() {
+        return btnTienMat;
+    }
+
+    public JToggleButton getBtnChuyenKhoan() {
+        return btnChuyenKhoan;
+    }
+
+    public JTextField getTxtSoTienThanhToan() {
+        return txtSoTienThanhToan;
+    }
+
+    public JTextField getTxtTienKhachDua() {
+        return txtTienKhachDua;
+    }
+
+    public String getSoTienThanhToan() {
+        return txtSoTienThanhToan.getText();
+    }
+
+    public String getTienKhachDua() {
+        return txtTienKhachDua.getText();
+    }
+
+    public void setSoTienThanhToan(String s) {
+        txtSoTienThanhToan.setText(s);
+    }
+
+    public void setTienKhachDua(String s) {
+        txtTienKhachDua.setText(s);
+    }
+
+    public void focusSoTien() {
+        txtSoTienThanhToan.requestFocusInWindow();
+        txtSoTienThanhToan.selectAll();
+    }
+
+    public void focusTienKhachDua() {
+        txtTienKhachDua.requestFocusInWindow();
+    }
+
+    public boolean laTienMat() {
+        return btnTienMat.isSelected();
+    }
+
+    // ===================== Cập nhật hiển thị (Controller gọi)
+    // =====================
+    public void hienThiThongTinHoaDon(ThanhToanDAO.ThongTinHoaDon hd) {
+        txtMaHoaDon.setText(nvl(hd.maHoaDon));
+        txtMaKhachHang.setText(nvl(hd.maKhachHang));
+        txtTenKhachHang.setText(nvl(hd.tenKhachHang));
+        txtMaPhieuSuaChua.setText(nvl(hd.maPhieuSuaChua));
+        txtMaNhanVien.setText(nvl(hd.maNhanVien));
+        txtNgayLap.setText(dinhDangNgayGio(hd.ngayLap));
+    }
+
+    public void xoaThongTinHoaDon() {
+        txtMaHoaDon.setText("");
+        txtNgayLap.setText("");
+        txtMaKhachHang.setText("");
+        txtTenKhachHang.setText("");
+        txtMaPhieuSuaChua.setText("");
+        txtMaNhanVien.setText("");
+        txtTrangThaiHoaDon.setText("");
+        modelLichSu.clear();
+    }
+
+    public void xoaLichSu() {
+        modelLichSu.clear();
+    }
+
+    public void themLichSu(GiaoDichThanhToan gd) {
+        String gio = gd.getThoiGianGD() == null ? ""
+                : gd.getThoiGianGD().toLocalDateTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
+        String tien = gd.getSoTienThanhToan() == null ? "Chưa có số tiền"
+                : dinhDangTien(gd.getSoTienThanhToan());
+        modelLichSu.addElement("<html><b>" + tien + "</b> - " + nvl(gd.getPhuongThucThanhToan())
+                + "<br><span style='color:#64748B'>" + gio + " | " + nvl(gd.getTrangThaiGD())
+                + "</span></html>");
+    }
+
+    public void hienThiTongQuan(TongQuan q) {
+        lblTienDV.setText(dinhDangTien(q.tienDV));
+        lblTienPT.setText(dinhDangTien(q.tienPT));
+        lblTongHoaDon.setText(dinhDangTien(q.tongHoaDon));
+        lblThue.setText(dinhDangTien(q.thue));
+        lblGiamGia.setText(q.giamGia.signum() > 0 ? "- " + dinhDangTien(q.giamGia) : dinhDangTien(q.giamGia));
+        lblTongThanhToan.setText(dinhDangTien(q.tongThanhToan));
+        lblDaThanhToan.setText(dinhDangTien(q.daThanhToan));
+        lblConPhaiTra.setText(dinhDangTien(q.conNo));
+
+        boolean hetNo = q.conNo.signum() <= 0;
+        int percent = 0;
+        if (q.coHoaDon && q.tongThanhToan.signum() > 0) {
+            percent = q.daThanhToan.multiply(BigDecimal.valueOf(100))
+                    .divide(q.tongThanhToan, 0, RoundingMode.DOWN).intValue();
+            percent = Math.max(0, Math.min(100, percent));
+        }
+        progDaTra.setValue(percent);
+
+        if (!q.coHoaDon) {
+            txtTrangThaiHoaDon.setText("");
+            datPill("", MUTED, SOFT);
+        } else if (hetNo) {
+            txtTrangThaiHoaDon.setText("Đã thanh toán");
+            txtTrangThaiHoaDon.setForeground(GREEN);
+            datPill("● Đã thanh toán đủ", GREEN, GREEN_SOFT);
+        } else if (q.daThanhToan.signum() > 0) {
+            txtTrangThaiHoaDon.setText("Thanh toán một phần");
+            txtTrangThaiHoaDon.setForeground(ORANGE);
+            datPill("", MUTED, SOFT);
+        } else {
+            txtTrangThaiHoaDon.setText("Chưa thanh toán");
+            txtTrangThaiHoaDon.setForeground(ORANGE);
+            datPill("● Chưa thanh toán", ORANGE, ORANGE_SOFT);
+        }
+    }
+
+    /** Bật/tắt các ô nhập và nút thanh toán. Khi tắt sẽ xóa nội dung ô nhập. */
+    public void datChoPhep(boolean choPhep) {
+        txtSoTienThanhToan.setEnabled(choPhep);
+        txtTienKhachDua.setEnabled(choPhep);
+        for (JButton b : cacNutNhanh)
+            b.setEnabled(choPhep);
+        btnTienMat.setEnabled(choPhep);
+        btnChuyenKhoan.setEnabled(choPhep);
+        btnXacNhan.setEnabled(choPhep);
+        if (!choPhep) {
+            txtSoTienThanhToan.setText("");
+            txtTienKhachDua.setText("");
+        }
+    }
+
+    /** chenh = khách đưa - số tiền thanh toán; null nếu chưa tính được. */
+    public void hienThiTienThua(BigDecimal chenh) {
+        if (chenh == null) {
+            lblNhanTienThua.setText("Tiền thừa trả khách");
+            lblTienThua.setText("0 ₫");
+            lblTienThua.setForeground(GREEN);
+        } else if (chenh.signum() < 0) {
+            lblNhanTienThua.setText("Khách còn thiếu");
+            lblTienThua.setText(dinhDangTien(chenh.negate()));
+            lblTienThua.setForeground(RED);
+        } else {
+            lblNhanTienThua.setText("Tiền thừa trả khách");
+            lblTienThua.setText(dinhDangTien(chenh));
+            lblTienThua.setForeground(GREEN);
+        }
+    }
+
+    public void capNhatPhuongThuc() {
+        capNhatMauToggle(btnTienMat);
+        capNhatMauToggle(btnChuyenKhoan);
+        if (laTienMat()) {
+            cardPhuongThuc.show(pnlKhuVucPhuongThuc, CARD_TIEN_MAT);
+            lblHuongDan.setText("Tiền mặt: nhận tiền trực tiếp tại quầy.");
+        } else {
+            cardPhuongThuc.show(pnlKhuVucPhuongThuc, CARD_CHUYEN_KHOAN);
+            lblHuongDan.setText("Chuyển khoản / QR: xác nhận sau khi khách hoàn tất chuyển khoản.");
+        }
+    }
+
+    // ===================== Thông báo / hộp thoại =====================
+    public void xoaThongBao() {
+        datThongBao(" ", MUTED);
+    }
+
+    public void thongBaoCanhBao(String text) {
+        datThongBao(text, ORANGE);
+    }
+
+    public void thongBaoLoi(String text) {
+        datThongBao(text, RED);
+    }
+
+    private void datThongBao(String text, Color color) {
+        lblThongBao.setText(text == null || text.isEmpty() ? " " : text);
+        lblThongBao.setForeground(color);
+    }
+
+    public void baoLoi(String message) {
+        JOptionPane.showMessageDialog(this, message, "Thông báo", JOptionPane.WARNING_MESSAGE);
+    }
+
+    public void baoLoiCSDL(String chiTiet) {
+        JOptionPane.showMessageDialog(this, "Không thể tải thông tin hóa đơn.\nChi tiết: " + chiTiet,
+                "Lỗi cơ sở dữ liệu", JOptionPane.ERROR_MESSAGE);
+    }
+
+    public void baoThanhToanThatBai(String chiTiet) {
+        JOptionPane.showMessageDialog(this, "Thanh toán thất bại: " + chiTiet, "Lỗi", JOptionPane.ERROR_MESSAGE);
+    }
+
+    public void baoThanhToanThanhCong(BigDecimal soTien, String phuongThuc) {
+        JOptionPane.showMessageDialog(this,
+                "Thanh toán thành công!\nSố tiền: " + dinhDangTien(soTien) + "\nPhương thức: " + phuongThuc,
+                "Thành công", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    /** @return true nếu người dùng đồng ý đổi về số còn nợ. */
+    public boolean hoiDoiVeSoConNo(BigDecimal soTien, BigDecimal conNo) {
+        int chon = JOptionPane.showConfirmDialog(this,
+                "Số tiền nhập (" + dinhDangTien(soTien) + ") lớn hơn số còn nợ ("
+                        + dinhDangTien(conNo) + ").\nTự động đổi về số còn nợ?",
+                "Điều chỉnh số tiền", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        return chon == JOptionPane.YES_OPTION;
+    }
+
+    public boolean hoiInHoaDon() {
+        int chon = JOptionPane.showOptionDialog(this, "Bạn có muốn in hóa đơn không?",
+                "In hóa đơn", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null,
+                new Object[] { "In hóa đơn", "Không" }, "In hóa đơn");
+        return chon == 0;
+    }
+
+    // ===================== Dựng giao diện chính =====================
     private void khoiTaoGiaoDien() {
         JPanel root = new JPanel(new BorderLayout(0, 14));
         root.setBackground(SOFT);
@@ -136,7 +378,6 @@ public class FrmThanhToan extends JFrame {
         title.setForeground(TEXT);
         p.add(title, BorderLayout.CENTER);
 
-        // Giữ chỗ bên phải để tiêu đề luôn nằm chính giữa.
         lblPill = new JLabel(" ");
         lblPill.setOpaque(true);
         lblPill.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -149,7 +390,6 @@ public class FrmThanhToan extends JFrame {
         benPhai.add(lblPill);
         p.add(benPhai, BorderLayout.EAST);
 
-        // Tạo khoảng trống tương ứng bên trái để tiêu đề cân giữa.
         JPanel benTrai = new JPanel();
         benTrai.setOpaque(false);
         benTrai.setPreferredSize(new Dimension(160, 40));
@@ -196,7 +436,6 @@ public class FrmThanhToan extends JFrame {
 
         c.gridy = 1;
         c.gridx = 0;
-        c.gridwidth = 1;
         c.insets = new Insets(0, 0, 12, 12);
         luoi.add(taoO("Mã khách hàng", txtMaKhachHang), c);
         c.gridx = 1;
@@ -205,14 +444,13 @@ public class FrmThanhToan extends JFrame {
 
         c.gridy = 2;
         c.gridx = 0;
-        c.gridwidth = 1;
         c.insets = new Insets(0, 0, 12, 12);
         luoi.add(taoO("Mã nhân viên", txtMaNhanVien), c);
         c.gridx = 1;
         c.insets = new Insets(0, 0, 12, 0);
         luoi.add(taoO("Phiếu sửa chữa", txtMaPhieuSuaChua), c);
 
-        c.gridy = 4;
+        c.gridy = 3;
         c.gridx = 0;
         c.gridwidth = 2;
         c.insets = new Insets(0, 0, 0, 0);
@@ -448,344 +686,8 @@ public class FrmThanhToan extends JFrame {
         return footer;
     }
 
-    private void datThongBao(String text, Color color) {
-        lblThongBao.setText(text == null || text.isEmpty() ? " " : text);
-        lblThongBao.setForeground(color);
-    }
-
-    private void ganSuKien() {
-        btnDong.addActionListener(e -> dispose());
-        btnXacNhan.addActionListener(e -> xacNhanThanhToan());
-        btnThanhToanDu.addActionListener(e -> {
-            BigDecimal conNo = tinhConNo();
-            if (conNo.signum() > 0) {
-                txtSoTienThanhToan.setText(conNo.stripTrailingZeros().toPlainString());
-                txtSoTienThanhToan.requestFocusInWindow();
-                txtSoTienThanhToan.selectAll();
-            } else {
-                txtSoTienThanhToan.setText("0");
-                baoLoi("Hóa đơn đã được thanh toán đủ.");
-            }
-            capNhatTienThua();
-        });
-        btnMotNua.addActionListener(e -> {
-            BigDecimal conNo = tinhConNo();
-            if (conNo.signum() > 0) {
-                txtSoTienThanhToan.setText(
-                        conNo.divide(BigDecimal.valueOf(2), 0, RoundingMode.HALF_UP).toPlainString());
-                txtSoTienThanhToan.requestFocusInWindow();
-                txtSoTienThanhToan.selectAll();
-            }
-        });
-        btnVuaDu.addActionListener(e -> {
-            BigDecimal soTien = docSoTien(txtSoTienThanhToan.getText());
-            if (soTien == null || soTien.signum() <= 0)
-                soTien = tinhConNo();
-            txtTienKhachDua.setText(soTien.stripTrailingZeros().toPlainString());
-        });
-        for (JButton b : btnMenhGia) {
-            b.addActionListener(e -> txtTienKhachDua.setText(b.getActionCommand()));
-        }
-        java.awt.event.ItemListener doiPhuongThuc = e -> capNhatPhuongThuc();
-        btnTienMat.addItemListener(doiPhuongThuc);
-        btnChuyenKhoan.addItemListener(doiPhuongThuc);
-        khiThayDoi(txtTienKhachDua, this::capNhatTienThua);
-        khiThayDoi(txtSoTienThanhToan, this::capNhatTienThua);
-        txtSoTienThanhToan.addActionListener(e -> {
-            if (btnXacNhan.isEnabled())
-                xacNhanThanhToan();
-        });
-        capNhatPhuongThuc();
-    }
-
-    private void khiThayDoi(JTextField field, Runnable action) {
-        field.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) {
-                action.run();
-            }
-
-            public void removeUpdate(DocumentEvent e) {
-                action.run();
-            }
-
-            public void changedUpdate(DocumentEvent e) {
-                action.run();
-            }
-        });
-    }
-
-    private boolean laTienMat() {
-        return btnTienMat.isSelected();
-    }
-
-    private void capNhatPhuongThuc() {
-        capNhatMauToggle(btnTienMat);
-        capNhatMauToggle(btnChuyenKhoan);
-        if (laTienMat()) {
-            cardPhuongThuc.show(pnlKhuVucPhuongThuc, CARD_TIEN_MAT);
-            lblHuongDan.setText("Tiền mặt: nhận tiền trực tiếp tại quầy.");
-        } else {
-            cardPhuongThuc.show(pnlKhuVucPhuongThuc, CARD_CHUYEN_KHOAN);
-            lblHuongDan.setText("Chuyển khoản / QR: xác nhận sau khi khách hoàn tất chuyển khoản.");
-        }
-        capNhatTienThua();
-    }
-
-    private void xoaDuLieu() {
-        tongTien = daThanhToan = tienDV = tienPT = tienThue = tienGiamGia = BigDecimal.ZERO;
-        chiTietHD.clear();
-        maNhanVien = maXe = "";
-        txtMaHoaDon.setText("");
-        txtNgayLap.setText("");
-        txtMaKhachHang.setText("");
-        txtTenKhachHang.setText("");
-        txtMaPhieuSuaChua.setText("");
-        txtMaNhanVien.setText("");
-        txtTrangThaiHoaDon.setText("");
-        modelLichSu.clear();
-    }
-
-    private void taiHoaDonTuCSDL(String maHD) {
-        if (maHD == null || maHD.trim().isEmpty()) {
-            xoaDuLieu();
-            capNhatTongQuan();
-            datThongBao("Vui lòng mở thanh toán từ một hóa đơn đã lưu.", ORANGE);
-            btnXacNhan.setEnabled(false);
-            return;
-        }
-        try {
-            ThanhToanDAO.ThongTinHoaDon hd = thanhToanDAO.layHoaDon(maHD.trim());
-            if (hd == null) {
-                maHoaDon = "";
-                xoaDuLieu();
-                capNhatTongQuan();
-                btnXacNhan.setEnabled(false);
-                datThongBao("Mã hóa đơn " + maHD + " không tồn tại trong cơ sở dữ liệu.", ORANGE);
-                return;
-            }
-
-            maHoaDon = hd.maHoaDon;
-            tongTien = bd(hd.tongTien);
-            tienThue = bd(hd.thueVAT);
-            tienGiamGia = bd(hd.tienGiamGia);
-
-            txtMaHoaDon.setText(nvl(hd.maHoaDon));
-            txtMaKhachHang.setText(nvl(hd.maKhachHang));
-            txtTenKhachHang.setText(nvl(hd.tenKhachHang));
-            txtMaPhieuSuaChua.setText(nvl(hd.maPhieuSuaChua));
-            txtNgayLap.setText(hd.ngayLap == null ? ""
-                    : hd.ngayLap.toLocalDateTime()
-                            .format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")));
-
-            chiTietHD.clear();
-            chiTietHD.addAll(layChiTiet());
-            tienDV = BigDecimal.ZERO;
-            tienPT = BigDecimal.ZERO;
-            for (ChiTiet ct : chiTietHD) {
-                if (LOAI_DV.equals(ct.loai))
-                    tienDV = tienDV.add(ct.thanhTien);
-                else
-                    tienPT = tienPT.add(ct.thanhTien);
-            }
-
-            layMaNhanVienMaXe();
-            txtMaNhanVien.setText(maNhanVien);
-
-            List<ThanhToanDAO.GiaoDich> ds = thanhToanDAO.layLichSu(maHoaDon);
-            modelLichSu.clear();
-            daThanhToan = BigDecimal.ZERO;
-            for (ThanhToanDAO.GiaoDich gd : ds) {
-                if ("Thành công".equalsIgnoreCase(gd.trangThaiGD) && gd.soTienThanhToan != null) {
-                    daThanhToan = daThanhToan.add(gd.soTienThanhToan);
-                }
-                String gio = gd.thoiGianGD == null ? ""
-                        : gd.thoiGianGD.toLocalDateTime()
-                                .format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy"));
-                String tien = gd.soTienThanhToan == null ? "Chưa có số tiền" : dinhDangTien(gd.soTienThanhToan);
-                modelLichSu.addElement("<html><b>" + tien + "</b> - " + nvl(gd.phuongThucThanhToan)
-                        + "<br><span style='color:#64748B'>" + gio + " | " + nvl(gd.trangThaiGD) + "</span></html>");
-            }
-            capNhatTongQuan();
-            datThongBao(" ", MUTED);
-        } catch (SQLException ex) {
-            ex.printStackTrace();
-            datThongBao("Không thể đọc dữ liệu hóa đơn từ SQL Server.", RED);
-            JOptionPane.showMessageDialog(this,
-                    "Không thể tải thông tin hóa đơn.\nChi tiết: " + ex.getMessage(),
-                    "Lỗi cơ sở dữ liệu", JOptionPane.ERROR_MESSAGE);
-            btnXacNhan.setEnabled(false);
-        }
-    }
-
-    private static class ChiTiet {
-        String loai, tenHang;
-        int soLuong;
-        BigDecimal donGia = BigDecimal.ZERO;
-        BigDecimal thanhTien = BigDecimal.ZERO;
-    }
-
-    private List<ChiTiet> layChiTiet() throws SQLException {
-        List<ChiTiet> ds = new ArrayList<>();
-        String sql = """
-                SELECT CASE WHEN ct.maDV IS NOT NULL THEN 'DV' ELSE 'PT' END AS loai,
-                       COALESCE(dv.tenDV, pt.tenPhuTung) AS tenHang,
-                       ct.soLuong, ct.donGia,
-                       CAST(ct.soLuong AS DECIMAL(18, 2)) * ct.donGia AS thanhTien
-                FROM ChiTietHoaDon ct
-                LEFT JOIN DichVu dv ON ct.maDV = dv.maDV
-                LEFT JOIN PhuTung pt ON ct.maPhuTung = pt.maPhuTung
-                WHERE ct.maHoaDon = ?
-                ORDER BY CASE WHEN ct.maDV IS NOT NULL THEN 0 ELSE 1 END,
-                         COALESCE(dv.tenDV, pt.tenPhuTung)
-                """;
-        ConnectDB.getInstance().connect();
-        try (Connection conn = ConnectDB.getConnection();
-                PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, maHoaDon);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    ChiTiet ct = new ChiTiet();
-                    ct.loai = rs.getString("loai");
-                    ct.tenHang = nvl(rs.getString("tenHang"));
-                    ct.soLuong = rs.getInt("soLuong");
-                    ct.donGia = bd(rs.getBigDecimal("donGia"));
-                    ct.thanhTien = bd(rs.getBigDecimal("thanhTien"));
-                    ds.add(ct);
-                }
-            }
-        }
-        return ds;
-    }
-
-    private void layMaNhanVienMaXe() {
-        maNhanVien = "";
-        maXe = "";
-        try {
-            ConnectDB.getInstance().connect();
-            Connection conn = ConnectDB.getConnection();
-            String sqlNV = "SELECT " + COT_MA_NV + " FROM HoaDon WHERE maHoaDon = ?";
-            try (PreparedStatement ps = conn.prepareStatement(sqlNV)) {
-                ps.setString(1, maHoaDon);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next())
-                        maNhanVien = nvl(rs.getString(1)).trim();
-                }
-            }
-            String maPhieu = txtMaPhieuSuaChua.getText().trim();
-            if (!maPhieu.isEmpty()) {
-                String sqlXe = "SELECT " + COT_MA_XE + " FROM " + BANG_PHIEU
-                        + " WHERE " + COT_MA_PHIEU + " = ?";
-                try (PreparedStatement ps = conn.prepareStatement(sqlXe)) {
-                    ps.setString(1, maPhieu);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next())
-                            maXe = nvl(rs.getString(1)).trim();
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            // Nếu thiếu dữ liệu phụ, giữ mã nhân viên/mã xe trống.
-        }
-    }
-
-    private void xacNhanThanhToan() {
-        BigDecimal soTien = docSoTien(txtSoTienThanhToan.getText());
-        if (maHoaDon == null || maHoaDon.isEmpty() || tongTien.signum() <= 0) {
-            baoLoi("Chưa có thông tin hóa đơn để thanh toán.");
-            return;
-        }
-        if (soTien == null || soTien.signum() <= 0) {
-            baoLoi("Vui lòng nhập số tiền khách muốn thanh toán.");
-            txtSoTienThanhToan.requestFocus();
-            return;
-        }
-        BigDecimal conNo = tinhConNo();
-        if (soTien.compareTo(conNo) > 0) {
-            int luaChon = JOptionPane.showConfirmDialog(this,
-                    "Số tiền nhập (" + dinhDangTien(soTien) + ") lớn hơn số còn nợ ("
-                            + dinhDangTien(conNo) + ").\nTự động đổi về số còn nợ?",
-                    "Điều chỉnh số tiền", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (luaChon == JOptionPane.YES_OPTION) {
-                txtSoTienThanhToan.setText(conNo.stripTrailingZeros().toPlainString());
-                txtSoTienThanhToan.requestFocusInWindow();
-                txtSoTienThanhToan.selectAll();
-            }
-            return;
-        }
-
-        DuLieuHoaDon d = new DuLieuHoaDon();
-        d.maHoaDon = maHoaDon;
-        d.ngayLap = txtNgayLap.getText();
-        d.tenKhach = txtTenKhachHang.getText();
-        d.maKhach = txtMaKhachHang.getText();
-        d.maPhieu = txtMaPhieuSuaChua.getText();
-        d.maXe = maXe;
-        d.maNhanVien = maNhanVien;
-        d.chiTiet = new ArrayList<>(chiTietHD);
-        d.tienDV = tienDV;
-        d.tienPT = tienPT;
-        d.thue = tienThue;
-        d.giamGia = tienGiamGia;
-        d.tongHoaDon = tongTien.add(tienGiamGia);
-        d.tongTien = tongTien;
-        d.daTraTruoc = daThanhToan;
-        d.lanNay = soTien;
-        d.conLai = tongTien.subtract(daThanhToan).subtract(soTien).max(BigDecimal.ZERO);
-        d.ngayIn = LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
-
-        if (laTienMat()) {
-            BigDecimal khachDua = docSoTien(txtTienKhachDua.getText());
-            if (khachDua == null || khachDua.compareTo(soTien) < 0) {
-                baoLoi("Tiền khách đưa phải lớn hơn hoặc bằng số tiền thanh toán.");
-                txtTienKhachDua.requestFocus();
-                return;
-            }
-            d.phuongThuc = "Tiền mặt";
-            d.khachDua = khachDua;
-            d.tienThua = khachDua.subtract(soTien);
-        } else {
-            if (!hienThiQR(soTien)) {
-                datThongBao("Đã hủy giao dịch chuyển khoản. Chưa ghi nhận thanh toán.", ORANGE);
-                return;
-            }
-            d.phuongThuc = "Chuyển khoản / QR";
-        }
-
-        if (!ghiNhanThanhToan(soTien, d.phuongThuc))
-            return;
-        JOptionPane.showMessageDialog(this,
-                "Thanh toán thành công!\nSố tiền: " + dinhDangTien(soTien)
-                        + "\nPhương thức: " + d.phuongThuc,
-                "Thành công", JOptionPane.INFORMATION_MESSAGE);
-        int chon = JOptionPane.showOptionDialog(this, "Bạn có muốn in hóa đơn không?",
-                "In hóa đơn", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null,
-                new Object[] { "In hóa đơn", "Không" }, "In hóa đơn");
-        if (chon == 0)
-            hienThiHoaDon(d);
-    }
-
-    private boolean ghiNhanThanhToan(BigDecimal soTien, String phuongThuc) {
-        try {
-            thanhToanDAO.ghiNhanThanhToan(maHoaDon, soTien, phuongThuc);
-            txtSoTienThanhToan.setText("");
-            txtTienKhachDua.setText("");
-            taiHoaDonTuCSDL(maHoaDon);
-            return true;
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Thanh toán thất bại: " + e.getMessage(),
-                    "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-    }
-
-    private static class DuLieuHoaDon {
-        String maHoaDon, ngayLap, tenKhach, maKhach, maPhieu, phuongThuc, ngayIn, maXe, maNhanVien;
-        List<ChiTiet> chiTiet;
-        BigDecimal tienDV, tienPT, thue, giamGia, tongHoaDon, tongTien, daTraTruoc, lanNay, conLai;
-        BigDecimal khachDua, tienThua;
-    }
-
-    private void hienThiHoaDon(DuLieuHoaDon d) {
+    // ===================== Hóa đơn in =====================
+    public void hienThiHoaDon(DuLieuHoaDon d) {
         JDialog dlg = new JDialog(this, "Hóa đơn thanh toán - " + d.maHoaDon, true);
         JPanel giay = taoHoaDonIn(d);
         JPanel vien = new JPanel(new BorderLayout());
@@ -946,12 +848,13 @@ public class FrmThanhToan extends JFrame {
                     SwingConstants.CENTER, false, Color.WHITE, 100), b);
         } else {
             int stt = 1;
-            for (ChiTiet ct : d.chiTiet) {
+            for (ThanhToanDAO.ChiTiet ct : d.chiTiet) {
                 b.gridy = stt;
                 b.gridwidth = 1;
                 String tenHang = "<html><div style='width:" + (rong[1] - 14) + "px'>"
                         + nvl(ct.tenHang).replace("&", "&amp;").replace("<", "&lt;") + "</div></html>";
-                String[] gt = { String.valueOf(stt), tenHang, LOAI_DV.equals(ct.loai) ? "Lần" : "Cái",
+                String[] gt = { String.valueOf(stt), tenHang,
+                        ThanhToanDAO.LOAI_DV.equals(ct.loai) ? "Lần" : "Cái",
                         String.valueOf(ct.soLuong), dinhDangSo(ct.donGia), dinhDangSo(ct.thanhTien) };
                 for (int i = 0; i < gt.length; i++) {
                     b.gridx = i;
@@ -1136,7 +1039,9 @@ public class FrmThanhToan extends JFrame {
         }
     }
 
-    private boolean hienThiQR(BigDecimal soTien) {
+    // ===================== QR chuyển khoản =====================
+    /** @return true nếu nhân viên bấm "Khách đã chuyển khoản". */
+    public boolean hienThiQR(String maHoaDon, BigDecimal soTien) {
         final boolean[] ketQua = { false };
         JDialog dlg = new JDialog(this, "Thanh toán chuyển khoản", true);
         JPanel root = new JPanel(new BorderLayout(0, 16));
@@ -1196,6 +1101,7 @@ public class FrmThanhToan extends JFrame {
         return ketQua[0];
     }
 
+    /** Mã QR minh họa (không phải QR chuẩn VietQR). */
     private static class QrPanel extends JPanel {
         private static final int N = 29;
         private final boolean[][] cells = new boolean[N][N];
@@ -1242,91 +1148,6 @@ public class FrmThanhToan extends JFrame {
         }
     }
 
-    private BigDecimal tinhConNo() {
-        return tongTien.subtract(daThanhToan).max(BigDecimal.ZERO);
-    }
-
-    private void capNhatTongQuan() {
-        BigDecimal conNo = tinhConNo();
-        lblTienDV.setText(dinhDangTien(tienDV));
-        lblTienPT.setText(dinhDangTien(tienPT));
-        // Tổng hóa đơn trước giảm giá = tổng thanh toán đã lưu + tiền giảm.
-        BigDecimal tongHoaDon = tongTien.add(tienGiamGia);
-        lblTongHoaDon.setText(dinhDangTien(tongHoaDon));
-        lblThue.setText(dinhDangTien(tienThue));
-        lblGiamGia.setText(tienGiamGia.signum() > 0 ? "- " + dinhDangTien(tienGiamGia)
-                : dinhDangTien(tienGiamGia));
-        lblTongThanhToan.setText(dinhDangTien(tongTien));
-        lblDaThanhToan.setText(dinhDangTien(daThanhToan));
-        lblConPhaiTra.setText(dinhDangTien(conNo));
-
-        boolean coHoaDon = maHoaDon != null && !maHoaDon.trim().isEmpty() && tongTien.signum() > 0;
-        boolean hetNo = conNo.signum() <= 0;
-        int percent = 0;
-        if (coHoaDon) {
-            percent = daThanhToan.multiply(BigDecimal.valueOf(100))
-                    .divide(tongTien, 0, RoundingMode.DOWN).intValue();
-            percent = Math.max(0, Math.min(100, percent));
-        }
-        progDaTra.setValue(percent);
-
-        if (!coHoaDon) {
-            txtTrangThaiHoaDon.setText("");
-            datPill("", MUTED, SOFT);
-        } else if (hetNo) {
-            txtTrangThaiHoaDon.setText("Đã thanh toán");
-            txtTrangThaiHoaDon.setForeground(GREEN);
-            datPill("● Đã thanh toán đủ", GREEN, GREEN_SOFT);
-        } else if (daThanhToan.signum() > 0) {
-            txtTrangThaiHoaDon.setText("Thanh toán một phần");
-            txtTrangThaiHoaDon.setForeground(ORANGE);
-            datPill("", MUTED, SOFT);
-        } else {
-            txtTrangThaiHoaDon.setText("Chưa thanh toán");
-            txtTrangThaiHoaDon.setForeground(ORANGE);
-            datPill("● Chưa thanh toán", ORANGE, ORANGE_SOFT);
-        }
-
-        boolean choPhep = coHoaDon && !hetNo;
-        txtSoTienThanhToan.setEnabled(choPhep);
-        txtTienKhachDua.setEnabled(choPhep);
-        for (JButton b : cacNutNhanh)
-            b.setEnabled(choPhep);
-        btnTienMat.setEnabled(choPhep);
-        btnChuyenKhoan.setEnabled(choPhep);
-        btnXacNhan.setEnabled(choPhep);
-        if (!choPhep) {
-            txtSoTienThanhToan.setText("");
-            txtTienKhachDua.setText("");
-        } else if (txtSoTienThanhToan.getText().trim().isEmpty()) {
-            txtSoTienThanhToan.setText(conNo.stripTrailingZeros().toPlainString());
-        }
-        capNhatTienThua();
-    }
-
-    private void capNhatTienThua() {
-        if (lblTienThua == null || txtTienKhachDua == null || txtSoTienThanhToan == null)
-            return;
-        BigDecimal soTien = docSoTien(txtSoTienThanhToan.getText());
-        BigDecimal khachDua = docSoTien(txtTienKhachDua.getText());
-        if (!laTienMat() || khachDua == null || soTien == null) {
-            lblNhanTienThua.setText("Tiền thừa trả khách");
-            lblTienThua.setText("0 ₫");
-            lblTienThua.setForeground(GREEN);
-            return;
-        }
-        BigDecimal chenh = khachDua.subtract(soTien);
-        if (chenh.signum() < 0) {
-            lblNhanTienThua.setText("Khách còn thiếu");
-            lblTienThua.setText(dinhDangTien(chenh.negate()));
-            lblTienThua.setForeground(RED);
-        } else {
-            lblNhanTienThua.setText("Tiền thừa trả khách");
-            lblTienThua.setText(dinhDangTien(chenh));
-            lblTienThua.setForeground(GREEN);
-        }
-    }
-
     private static class ViewCuon extends JPanel implements Scrollable {
         ViewCuon(LayoutManager layout) {
             super(layout);
@@ -1354,6 +1175,7 @@ public class FrmThanhToan extends JFrame {
         }
     }
 
+    // ===================== Hàm dựng component =====================
     private JPanel taoCard() {
         JPanel p = new JPanel();
         p.setBackground(Color.WHITE);
@@ -1511,19 +1333,9 @@ public class FrmThanhToan extends JFrame {
         }
     }
 
-    private BigDecimal docSoTien(String text) {
-        if (text == null || text.trim().isEmpty())
-            return null;
-        try {
-            String value = text.trim().replace("₫", "").replace("VND", "")
-                    .replace(" ", "").replace(".", "").replace(",", "");
-            return new BigDecimal(value);
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private String dinhDangSo(BigDecimal value) {
+    // ===================== Định dạng (dùng chung với Controller)
+    // =====================
+    public static String dinhDangSo(BigDecimal value) {
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.forLanguageTag("vi-VN"));
         symbols.setGroupingSeparator('.');
         DecimalFormat format = new DecimalFormat("#,##0", symbols);
@@ -1531,16 +1343,13 @@ public class FrmThanhToan extends JFrame {
         return format.format(value == null ? BigDecimal.ZERO : value);
     }
 
-    private String dinhDangTien(BigDecimal value) {
+    public static String dinhDangTien(BigDecimal value) {
         return dinhDangSo(value) + " ₫";
     }
 
-    private void baoLoi(String message) {
-        JOptionPane.showMessageDialog(this, message, "Thông báo", JOptionPane.WARNING_MESSAGE);
-    }
-
-    private static BigDecimal bd(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+    public static String dinhDangNgayGio(Timestamp ts) {
+        return ts == null ? ""
+                : ts.toLocalDateTime().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
     }
 
     private static String nvl(String value) {
