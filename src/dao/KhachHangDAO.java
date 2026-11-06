@@ -1,7 +1,9 @@
 package dao;
 
 import entity.KhachHang;
-import util.DatabaseConnection;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -88,6 +90,15 @@ public class KhachHangDAO {
     }
 
     private Connection moKetNoi() throws SQLException {
-        return DatabaseConnection.open();
+        java.util.Properties properties = new java.util.Properties();
+        try (var reader = Files.newBufferedReader(Path.of("database.properties"))) {
+            properties.load(reader);
+        } catch (IOException exception) {
+            throw new SQLException("Không đọc được cấu hình database.properties.", exception);
+        }
+        return DriverManager.getConnection(
+                properties.getProperty("url"),
+                properties.getProperty("user"),
+                properties.getProperty("password"));
     }
 }
