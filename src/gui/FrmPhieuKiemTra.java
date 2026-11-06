@@ -1,7 +1,7 @@
 package gui;
 
-import dao.PhieuKiemTraDAO;
-import dao.PhieuTiepNhanDAO;
+import controller.PhieuKiemTraController;
+import dao.LichLamViecDAO;
 import entity.PhieuKiemTra;
 import entity.PhieuTiepNhan;
 import entity.TaiKhoan;
@@ -12,9 +12,10 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
-import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -24,29 +25,33 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
-import javax.swing.border.EmptyBorder;
-import util.MaTuDong;
 
 public class FrmPhieuKiemTra extends JPanel {
-    private final PhieuKiemTraDAO phieuKiemTraDAO = new PhieuKiemTraDAO();
-    private final PhieuTiepNhanDAO phieuTiepNhanDAO = new PhieuTiepNhanDAO();
-    private final TaiKhoan taiKhoanHienTai;
+    private final PhieuKiemTraController controller = new PhieuKiemTraController(this);
+    private final Map<String, String> bienSoTheoMaXe = new HashMap<>();
+    private final Map<String, String> tenKhachHangTheoMaKH = new HashMap<>();
 
     private final AppTextField txtMaPKT = new AppTextField(16);
     private final javax.swing.JComboBox<PhieuTiepNhan> cboMaPTN = new javax.swing.JComboBox<>();
     private final AppTextField txtMaKH = new AppTextField(16);
     private final AppTextField txtMaXe = new AppTextField(16);
-    private final AppTextField txtMaNV = new AppTextField(16);
+    private final AppTextField txtBienSo = new AppTextField(16);
+    private final javax.swing.JComboBox<LichLamViecDAO.NhanVienTrongCa> cboNhanVienKiemTra =
+            new javax.swing.JComboBox<>();
     private final javax.swing.JTextArea txaTrangThai = new javax.swing.JTextArea(2, 20);
     private final javax.swing.JTextArea txaVanDe = new javax.swing.JTextArea(3, 20);
     private final AppTextField txtLocMaPKT = new AppTextField(12);
     private final AppTextField txtLocMaPTN = new AppTextField(12);
     private final AppTextField txtLocMaXe = new AppTextField(12);
     private final JLabel lblThongBao = new JLabel("Sẵn sàng");
+    private final AppButton btnThem = new AppButton("Thêm phiếu", AppButton.Style.PRIMARY);
+    private final AppButton btnSua = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
+    private final AppButton btnXoa = new AppButton("Xóa phiếu", AppButton.Style.DANGER);
+    private final AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
+    private final AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
 
     private final DefaultTableModel modelPhieuKiemTra = new DefaultTableModel(
             new Object[] {
@@ -67,7 +72,6 @@ public class FrmPhieuKiemTra extends JPanel {
     }
 
     public FrmPhieuKiemTra(TaiKhoan taiKhoanHienTai) {
-        this.taiKhoanHienTai = taiKhoanHienTai;
         setLayout(new BorderLayout(0, 8));
         setBackground(UIConfig.COLOR_BACKGROUND);
         setBorder(new EmptyBorder(14, 22, 14, 22));
@@ -77,9 +81,7 @@ public class FrmPhieuKiemTra extends JPanel {
         add(createStatusBar(), BorderLayout.SOUTH);
 
         cauHinhThanhPhan();
-        napDanhSachPhieuTiepNhan();
-        napDanhSachPhieuKiemTra();
-        lamMoiForm();
+        controller.khoiTao();
     }
 
     private JPanel createHeading() {
@@ -102,7 +104,7 @@ public class FrmPhieuKiemTra extends JPanel {
         JPanel pnlContent = new JPanel(new BorderLayout());
         pnlContent.setOpaque(false);
 
-        JPanel pnlForm = createFormPanel();
+        JPanel pnlForm = createFormPanel();  //form thông tin phiếu kiểm tra
         int chieuCaoForm = pnlForm.getPreferredSize().height;
         pnlForm.setMinimumSize(new Dimension(0, chieuCaoForm));
         javax.swing.JSplitPane splContent = new javax.swing.JSplitPane(
@@ -122,6 +124,7 @@ public class FrmPhieuKiemTra extends JPanel {
                 BorderFactory.createLineBorder(UIConfig.COLOR_BORDER, 1, true),
                 new EmptyBorder(8, 12, 8, 12)));
 
+        // vùng nhập thông tin phiếu kiểm tra
         JLabel lblFormTitle = createSectionTitle("Thông tin phiếu kiểm tra");
         JPanel pnlFields = new JPanel(new GridBagLayout());
         pnlFields.setOpaque(false);
@@ -129,25 +132,20 @@ public class FrmPhieuKiemTra extends JPanel {
         addField(pnlFields, "Phiếu tiếp nhận *", cboMaPTN, 2, 0);
         addField(pnlFields, "Mã khách hàng", txtMaKH, 0, 1);
         addField(pnlFields, "Mã xe", txtMaXe, 2, 1);
-        addField(pnlFields, "Mã nhân viên", txtMaNV, 0, 2);
+        addField(pnlFields, "Nhân viên kiểm tra *", cboNhanVienKiemTra, 0, 2);
+        addField(pnlFields, "Biển số xe", txtBienSo, 2, 2);
         addLongField(pnlFields, "Trạng thái xe ban đầu *", txaTrangThai, 0, 3);
         addLongField(pnlFields, "Vấn đề hư hỏng *", txaVanDe, 2, 3);
 
+        // vùng nút thao tác phiếu kiểm tra
         JPanel pnlButtons = new JPanel(new GridBagLayout());
         pnlButtons.setOpaque(false);
-        AppButton btnThem = new AppButton("Thêm phiếu", AppButton.Style.PRIMARY);
-        AppButton btnSua = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
-        AppButton btnXoa = new AppButton("Xóa phiếu", AppButton.Style.DANGER);
-        AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
-        btnThem.addActionListener(event -> themPhieuKiemTra());
-        btnSua.addActionListener(event -> capNhatPhieuKiemTra());
-        btnXoa.addActionListener(event -> xoaPhieuKiemTra());
-        btnLamMoi.addActionListener(event -> lamMoiForm());
         pnlButtons.add(btnThem, buttonConstraints(0));
         pnlButtons.add(btnSua, buttonConstraints(1));
         pnlButtons.add(btnXoa, buttonConstraints(2));
         pnlButtons.add(btnLamMoi, buttonConstraints(3));
 
+        //vùng tổng hợp chứa form và nút thao tác
         JPanel pnlFieldsAndButtons = new JPanel();
         pnlFieldsAndButtons.setOpaque(false);
         pnlFieldsAndButtons.setLayout(new javax.swing.BoxLayout(
@@ -163,6 +161,7 @@ public class FrmPhieuKiemTra extends JPanel {
         return pnlFormCard;
     }
 
+    //vùng bảng danh sách phiếu kiểm tra
     private JPanel createTablePanel() {
         JPanel pnlTableCard = AppPanel.card(new BorderLayout(0, 8));
         JPanel pnlTableHeader = new JPanel(new BorderLayout(8, 8));
@@ -170,22 +169,14 @@ public class FrmPhieuKiemTra extends JPanel {
         JPanel pnlTitleBar = new JPanel(new BorderLayout());
         pnlTitleBar.setOpaque(false);
         pnlTitleBar.add(createSectionTitle("Danh sách phiếu kiểm tra"), BorderLayout.WEST);
-        AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
-        btnTaiLai.addActionListener(event -> {
-            xoaBoLoc();
-            napDanhSachPhieuTiepNhan();
-            napDanhSachPhieuKiemTra();
-        });
         pnlTitleBar.add(btnTaiLai, BorderLayout.EAST);
 
+        //vùng tìm kiếm theo thuộc tính
         JPanel pnlLoc = new JPanel(new GridLayout(1, 3, 10, 0));
         pnlLoc.setOpaque(false);
         pnlLoc.add(createSearchField("Mã phiếu kiểm tra", txtLocMaPKT));
         pnlLoc.add(createSearchField("Mã phiếu tiếp nhận", txtLocMaPTN));
         pnlLoc.add(createSearchField("Mã xe", txtLocMaXe));
-        themBoLangNghe(txtLocMaPKT);
-        themBoLangNghe(txtLocMaPTN);
-        themBoLangNghe(txtLocMaXe);
         pnlTableHeader.add(pnlTitleBar, BorderLayout.NORTH);
         pnlTableHeader.add(pnlLoc, BorderLayout.CENTER);
 
@@ -193,11 +184,6 @@ public class FrmPhieuKiemTra extends JPanel {
         tblPhieuKiemTra.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tblPhieuKiemTra.setFillsViewportHeight(true);
         tblPhieuKiemTra.setAutoResizeMode(javax.swing.JTable.AUTO_RESIZE_ALL_COLUMNS);
-        tblPhieuKiemTra.getSelectionModel().addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting() && tblPhieuKiemTra.getSelectedRow() >= 0) {
-                hienThiPhieuDuocChon();
-            }
-        });
         pnlTableCard.add(pnlTableHeader, BorderLayout.NORTH);
         pnlTableCard.add(new AppScrollPane(tblPhieuKiemTra), BorderLayout.CENTER);
         return pnlTableCard;
@@ -212,6 +198,7 @@ public class FrmPhieuKiemTra extends JPanel {
         return pnlStatus;
     }
 
+    //tạo title cho các section trong form
     private JLabel createSectionTitle(String text) {
         JLabel lblTitle = new JLabel(text);
         lblTitle.setFont(UIConfig.FONT_SECTION);
@@ -280,11 +267,24 @@ public class FrmPhieuKiemTra extends JPanel {
 
     private void cauHinhThanhPhan() {
         txtMaPKT.setEditable(false);
-        for (AppTextField txtField : new AppTextField[] {txtMaKH, txtMaXe, txtMaNV}) {
+        for (AppTextField txtField : new AppTextField[] {txtMaKH, txtMaXe, txtBienSo}) {
             txtField.setEditable(false);
             txtField.setBackground(UIConfig.COLOR_BACKGROUND);
         }
         cboMaPTN.setFont(UIConfig.FONT_REGULAR);
+        cboNhanVienKiemTra.setFont(UIConfig.FONT_REGULAR);
+        cboNhanVienKiemTra.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                JLabel lblItem = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus);
+                if (value instanceof LichLamViecDAO.NhanVienTrongCa nhanVien) {
+                    lblItem.setText(nhanVien.hoTen() + " (" + nhanVien.maNV() + ")");
+                }
+                return lblItem;
+            }
+        });
         cboMaPTN.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(
@@ -292,127 +292,88 @@ public class FrmPhieuKiemTra extends JPanel {
                 JLabel lblItem = (JLabel) super.getListCellRendererComponent(
                         list, value, index, isSelected, cellHasFocus);
                 if (value instanceof PhieuTiepNhan phieuTiepNhan) {
-                    lblItem.setText(phieuTiepNhan.getMaPhieuTiepNhan() + " - " + phieuTiepNhan.getMaXe());
+                    lblItem.setText(thongTinPhieuTiepNhan(phieuTiepNhan));
                 }
                 return lblItem;
             }
         });
-        cboMaPTN.addActionListener(event -> capNhatThongTinTheoPhieuTiepNhan());
         tblPhieuKiemTra.getColumnModel().getColumn(0).setPreferredWidth(120);
         tblPhieuKiemTra.getColumnModel().getColumn(1).setPreferredWidth(120);
         tblPhieuKiemTra.getColumnModel().getColumn(5).setPreferredWidth(180);
         tblPhieuKiemTra.getColumnModel().getColumn(6).setPreferredWidth(220);
     }
 
-    private void napDanhSachPhieuTiepNhan() {
-        try {
-            List<PhieuTiepNhan> danhSach = phieuTiepNhanDAO.findAll();
-            cboMaPTN.removeAllItems();
-            for (PhieuTiepNhan phieuTiepNhan : danhSach) {
-                cboMaPTN.addItem(phieuTiepNhan);
-            }
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể tải danh sách phiếu tiếp nhận: " + exception.getMessage());
+    public void hienThiDanhSachNhanVienTrongCa(
+            List<LichLamViecDAO.NhanVienTrongCa> danhSach) {
+        cboNhanVienKiemTra.removeAllItems();
+        for (LichLamViecDAO.NhanVienTrongCa nhanVien : danhSach) {
+            cboNhanVienKiemTra.addItem(nhanVien);
+        }
+        cboNhanVienKiemTra.setToolTipText(cboNhanVienKiemTra.getItemCount() == 0
+                ? "Không có nhân viên được phân công trong ca hiện tại."
+                : "Chọn nhân viên được phân công trong ca hiện tại.");
+    }
+
+    public void hienThiDanhSachPhieuTiepNhan(
+            List<PhieuTiepNhan> danhSach,
+            Map<String, String> bienSoTheoMaXeMoi,
+            Map<String, String> tenKhachHangTheoMaKHMoi) {
+        bienSoTheoMaXe.clear();
+        bienSoTheoMaXe.putAll(bienSoTheoMaXeMoi);
+        tenKhachHangTheoMaKH.clear();
+        tenKhachHangTheoMaKH.putAll(tenKhachHangTheoMaKHMoi);
+        cboMaPTN.removeAllItems();
+        for (PhieuTiepNhan phieuTiepNhan : danhSach) {
+            cboMaPTN.addItem(phieuTiepNhan);
         }
     }
 
-    private void capNhatThongTinTheoPhieuTiepNhan() {
+    public void capNhatThongTinTheoPhieuTiepNhan() {
         PhieuTiepNhan phieuTiepNhan = (PhieuTiepNhan) cboMaPTN.getSelectedItem();
         if (phieuTiepNhan == null) {
             txtMaKH.setText("");
             txtMaXe.setText("");
-            txtMaNV.setText(maNhanVienDangNhap());
+            txtBienSo.setText("");
             return;
         }
-        txtMaKH.setText(phieuTiepNhan.getMaKH());
-        txtMaXe.setText(phieuTiepNhan.getMaXe());
-        String maNV = maNhanVienDangNhap();
-        txtMaNV.setText(maNV.isEmpty() ? phieuTiepNhan.getMaNV() : maNV);
+        txtMaKH.setText(phieuTiepNhan.getKhachHang().getMaKH());
+        txtMaXe.setText(phieuTiepNhan.getXe().getMaXe());
+        txtBienSo.setText(giaTriThongTin(bienSoTheoMaXe, phieuTiepNhan.getXe().getMaXe()));
     }
 
-    private void napDanhSachPhieuKiemTra() {
-        try {
-            List<PhieuKiemTra> danhSach = phieuKiemTraDAO.findAll();
-            modelPhieuKiemTra.setRowCount(0);
-            for (PhieuKiemTra phieu : danhSach) {
-                modelPhieuKiemTra.addRow(new Object[] {
-                        phieu.getMaPhieuKiemTra(),
-                        phieu.getMaPhieuTiepNhan(),
-                        phieu.getMaKH(),
-                        phieu.getMaXe(),
-                        phieu.getMaNV(),
-                        phieu.getTrangThaiBanDau(),
-                        phieu.getVanDeHuHong()
-                });
-            }
-            locDanhSach();
-            thongBao("Đã tải " + danhSach.size() + " phiếu kiểm tra");
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể tải danh sách phiếu kiểm tra: " + exception.getMessage());
-        }
+    private String thongTinPhieuTiepNhan(PhieuTiepNhan phieuTiepNhan) {
+        String bienSo = giaTriThongTin(bienSoTheoMaXe, phieuTiepNhan.getXe().getMaXe());
+        String tenKhachHang = giaTriThongTin(
+                tenKhachHangTheoMaKH, phieuTiepNhan.getKhachHang().getMaKH());
+        return phieuTiepNhan.getMaPhieuTiepNhan()
+                + " - Biển số: " + bienSo
+                + " - Khách hàng: " + tenKhachHang;
     }
 
-    private void themPhieuKiemTra() {
-        try {
-            PhieuKiemTra phieu = docThongTinPhieu();
-            if (phieuKiemTraDAO.insert(phieu)) {
-                napDanhSachPhieuKiemTra();
-                lamMoiForm();
-                thongBao("Đã thêm phiếu kiểm tra " + phieu.getMaPhieuKiemTra());
-            }
-        } catch (IllegalArgumentException exception) {
-            hienThiLoi(exception.getMessage());
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể thêm phiếu kiểm tra: " + exception.getMessage());
+    private String giaTriThongTin(Map<String, String> thongTinTheoMa, String ma) {
+        if (ma == null) {
+            return "";
         }
+        return thongTinTheoMa.getOrDefault(ma, "");
     }
 
-    private void capNhatPhieuKiemTra() {
-        try {
-            PhieuKiemTra phieu = docThongTinPhieu();
-            if (phieuKiemTraDAO.update(phieu)) {
-                napDanhSachPhieuKiemTra();
-                thongBao("Đã cập nhật phiếu kiểm tra " + phieu.getMaPhieuKiemTra());
-            } else {
-                hienThiLoi("Không tìm thấy phiếu kiểm tra cần cập nhật.");
-            }
-        } catch (IllegalArgumentException exception) {
-            hienThiLoi(exception.getMessage());
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể cập nhật phiếu kiểm tra: " + exception.getMessage());
+    public void hienThiDanhSachPhieuKiemTra(List<PhieuKiemTra> danhSach) {
+        modelPhieuKiemTra.setRowCount(0);
+        for (PhieuKiemTra phieu : danhSach) {
+            modelPhieuKiemTra.addRow(new Object[] {
+                    phieu.getMaPhieuKiemTra(),
+                    phieu.getPhieuTiepNhan().getMaPhieuTiepNhan(),
+                    phieu.getKhachHang().getMaKH(),
+                    phieu.getXe().getMaXe(),
+                    phieu.getNhanVien().getMaNV(),
+                    phieu.getTrangThaiBanDau(),
+                    phieu.getVanDeHuHong()
+            });
         }
+        locDanhSach();
     }
 
-    private void xoaPhieuKiemTra() {
-        String maPKT = txtMaPKT.getText().trim();
-        if (maPKT.isEmpty()) {
-            hienThiLoi("Hãy chọn phiếu kiểm tra cần xóa.");
-            return;
-        }
-        int luaChon = JOptionPane.showConfirmDialog(
-                this,
-                "Bạn có chắc muốn xóa phiếu kiểm tra " + maPKT + "?",
-                "Xác nhận xóa",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        try {
-            if (phieuKiemTraDAO.deleteById(maPKT)) {
-                napDanhSachPhieuKiemTra();
-                lamMoiForm();
-                thongBao("Đã xóa phiếu kiểm tra " + maPKT);
-            } else {
-                hienThiLoi("Không tìm thấy phiếu kiểm tra cần xóa.");
-            }
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể xóa phiếu kiểm tra: " + exception.getMessage());
-        }
-    }
-
-    private PhieuKiemTra docThongTinPhieu() {
+    public PhieuKiemTra layPhieuKiemTraNhap() {
         String maPKT = txtMaPKT.getText().trim();
         PhieuTiepNhan phieuTiepNhan = (PhieuTiepNhan) cboMaPTN.getSelectedItem();
         String trangThai = txaTrangThai.getText().trim();
@@ -426,6 +387,11 @@ public class FrmPhieuKiemTra extends JPanel {
         if (phieuTiepNhan == null) {
             throw new IllegalArgumentException("Hãy chọn phiếu tiếp nhận.");
         }
+        LichLamViecDAO.NhanVienTrongCa nhanVien =
+                (LichLamViecDAO.NhanVienTrongCa) cboNhanVienKiemTra.getSelectedItem();
+        if (nhanVien == null) {
+            throw new IllegalArgumentException("Không có nhân viên đang trong ca để lập phiếu kiểm tra.");
+        }
         if (trangThai.isEmpty()) {
             throw new IllegalArgumentException("Trạng thái xe ban đầu không được để trống.");
         }
@@ -433,25 +399,19 @@ public class FrmPhieuKiemTra extends JPanel {
             throw new IllegalArgumentException("Vấn đề hư hỏng không được để trống.");
         }
 
-        PhieuKiemTra phieu = new PhieuKiemTra();
-        phieu.setMaPhieuKiemTra(maPKT);
-        phieu.setMaPhieuTiepNhan(phieuTiepNhan.getMaPhieuTiepNhan());
-        phieu.setMaKH(phieuTiepNhan.getMaKH());
-        phieu.setMaXe(phieuTiepNhan.getMaXe());
-        phieu.setMaNV(txtMaNV.getText().trim());
-        phieu.setTrangThaiBanDau(trangThai);
-        phieu.setVanDeHuHong(vanDe);
-        return phieu;
+        return new PhieuKiemTra(
+                maPKT,
+                phieuTiepNhan,
+                phieuTiepNhan.getKhachHang(),
+                phieuTiepNhan.getXe(),
+                new entity.NhanVien(nhanVien.maNV()),
+                trangThai,
+                vanDe);
     }
 
-    private void hienThiPhieuDuocChon() {
-        int viewRow = tblPhieuKiemTra.getSelectedRow();
-        if (viewRow < 0) {
-            return;
-        }
-        int modelRow = tblPhieuKiemTra.convertRowIndexToModel(viewRow);
-        txtMaPKT.setText(text(modelPhieuKiemTra.getValueAt(modelRow, 0)));
-        String maPTN = text(modelPhieuKiemTra.getValueAt(modelRow, 1));
+    public void hienThiPhieuDuocChon(PhieuKiemTra phieu) {
+        txtMaPKT.setText(phieu.getMaPhieuKiemTra());
+        String maPTN = phieu.getPhieuTiepNhan().getMaPhieuTiepNhan();
         for (int index = 0; index < cboMaPTN.getItemCount(); index++) {
             PhieuTiepNhan phieuTiepNhan = cboMaPTN.getItemAt(index);
             if (phieuTiepNhan.getMaPhieuTiepNhan().equals(maPTN)) {
@@ -459,37 +419,40 @@ public class FrmPhieuKiemTra extends JPanel {
                 break;
             }
         }
-        txtMaNV.setText(text(modelPhieuKiemTra.getValueAt(modelRow, 4)));
-        txaTrangThai.setText(text(modelPhieuKiemTra.getValueAt(modelRow, 5)));
-        txaVanDe.setText(text(modelPhieuKiemTra.getValueAt(modelRow, 6)));
+        String maNV = phieu.getNhanVien().getMaNV();
+        boolean timThayNhanVien = false;
+        for (int index = 0; index < cboNhanVienKiemTra.getItemCount(); index++) {
+            LichLamViecDAO.NhanVienTrongCa nhanVien = cboNhanVienKiemTra.getItemAt(index);
+            if (nhanVien.maNV().equals(maNV)) {
+                cboNhanVienKiemTra.setSelectedItem(nhanVien);
+                timThayNhanVien = true;
+                break;
+            }
+        }
+        if (!timThayNhanVien) {
+            cboNhanVienKiemTra.setSelectedItem(null);
+        }
+        txaTrangThai.setText(phieu.getTrangThaiBanDau());
+        txaVanDe.setText(phieu.getVanDeHuHong());
         thongBao("Đang chọn phiếu kiểm tra " + txtMaPKT.getText());
     }
 
-    private void lamMoiForm() {
-        try {
-            txtMaPKT.setText(MaTuDong.sinhMa(
-                    MaTuDong.TIEN_TO_PHIEU_KIEM_TRA,
-                    phieuKiemTraDAO.findAll(),
-                    PhieuKiemTra::getMaPhieuKiemTra));
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể phát sinh mã phiếu kiểm tra: " + exception.getMessage());
-            txtMaPKT.setText("");
-        }
+    public void lamMoiBieuMau(String maMoi) {
+        txtMaPKT.setText(maMoi);
         if (cboMaPTN.getItemCount() > 0) {
             cboMaPTN.setSelectedIndex(0);
         } else {
             capNhatThongTinTheoPhieuTiepNhan();
         }
+        if (cboNhanVienKiemTra.getItemCount() > 0) {
+            cboNhanVienKiemTra.setSelectedIndex(0);
+        } else {
+            cboNhanVienKiemTra.setSelectedItem(null);
+        }
         txaTrangThai.setText("");
         txaVanDe.setText("");
         tblPhieuKiemTra.clearSelection();
         thongBao("Sẵn sàng");
-    }
-
-    private String maNhanVienDangNhap() {
-        return taiKhoanHienTai == null || taiKhoanHienTai.getMaNV() == null
-                ? ""
-                : taiKhoanHienTai.getMaNV().trim();
     }
 
     private JPanel createSearchField(String label, AppTextField txtField) {
@@ -503,26 +466,7 @@ public class FrmPhieuKiemTra extends JPanel {
         return pnlField;
     }
 
-    private void themBoLangNghe(AppTextField txtField) {
-        txtField.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) {
-                locDanhSach();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent event) {
-                locDanhSach();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent event) {
-                locDanhSach();
-            }
-        });
-    }
-
-    private void locDanhSach() {
+    public void locDanhSach() {
         List<RowFilter<Object, Object>> filters = new ArrayList<>();
         themBoLoc(filters, txtLocMaPKT.getText(), 0);
         themBoLoc(filters, txtLocMaPTN.getText(), 1);
@@ -539,7 +483,7 @@ public class FrmPhieuKiemTra extends JPanel {
         }
     }
 
-    private void xoaBoLoc() {
+    public void xoaBoLoc() {
         txtLocMaPKT.setText("");
         txtLocMaPTN.setText("");
         txtLocMaXe.setText("");
@@ -549,14 +493,47 @@ public class FrmPhieuKiemTra extends JPanel {
         return value == null ? "" : value.toString();
     }
 
-    private void thongBao(String message) {
+    public String getMaPhieuNhap() {
+        return txtMaPKT.getText();
+    }
+
+    public String getMaPhieuDangChon() {
+        int viewRow = tblPhieuKiemTra.getSelectedRow();
+        if (viewRow < 0) {
+            return null;
+        }
+        int modelRow = tblPhieuKiemTra.convertRowIndexToModel(viewRow);
+        return text(modelPhieuKiemTra.getValueAt(modelRow, 0));
+    }
+
+    public boolean xacNhanXoa(String maPhieu) {
+        return JOptionPane.showConfirmDialog(
+                this,
+                "Bạn có chắc muốn xóa phiếu kiểm tra " + maPhieu + "?",
+                "Xác nhận xóa",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    public void thongBao(String message) {
         lblThongBao.setForeground(UIConfig.COLOR_MUTED);
         lblThongBao.setText(message);
     }
 
-    private void hienThiLoi(String message) {
+    public void hienThiLoi(String message) {
         lblThongBao.setForeground(new java.awt.Color(190, 55, 55));
         lblThongBao.setText(message);
         JOptionPane.showMessageDialog(this, message, "Phiếu kiểm tra", JOptionPane.ERROR_MESSAGE);
     }
+
+    public AppButton getBtnThem() { return btnThem; }
+    public AppButton getBtnSua() { return btnSua; }
+    public AppButton getBtnXoa() { return btnXoa; }
+    public AppButton getBtnLamMoi() { return btnLamMoi; }
+    public AppButton getBtnTaiLai() { return btnTaiLai; }
+    public javax.swing.JComboBox<PhieuTiepNhan> getCboMaPTN() { return cboMaPTN; }
+    public AppTable getTblPhieuKiemTra() { return tblPhieuKiemTra; }
+    public AppTextField getTxtLocMaPKT() { return txtLocMaPKT; }
+    public AppTextField getTxtLocMaPTN() { return txtLocMaPTN; }
+    public AppTextField getTxtLocMaXe() { return txtLocMaXe; }
 }

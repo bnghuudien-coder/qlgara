@@ -1,9 +1,11 @@
 package dao;
 
-import connectDB.ConnectDB;
 import entity.ChinhSachBaoHanh;
 import entity.PhuTung;
+import entity.PhuTung;
+import util.DatabaseConnection;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -37,7 +39,8 @@ public class ChinhSachBaoHanhDAO {
                 """;
         String tuKhoaTim = tuKhoa == null ? "" : tuKhoa.trim();
         List<ChinhSachBaoHanh> dsChinhSach = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql)) {
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, tuKhoaTim);
             for (int i = 2; i <= 8; i++) {
                 ps.setString(i, "%" + tuKhoaTim + "%");
@@ -53,7 +56,9 @@ public class ChinhSachBaoHanhDAO {
     }
 
     public String layMaTiepTheo() throws SQLException {
-        return layMaTiepTheo(ketNoi(), false);
+        try (Connection con = ketNoi()) {
+            return layMaTiepTheo(con, false);
+        }
     }
 
     public List<PhuTung> layDanhSachPhuTung() throws SQLException {
@@ -64,7 +69,8 @@ public class ChinhSachBaoHanhDAO {
                 ORDER BY tenPhuTung, maPhuTung
                 """;
         List<PhuTung> dsPhuTung = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql);
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql);
                 ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 dsPhuTung.add(new PhuTung(
@@ -88,8 +94,11 @@ public class ChinhSachBaoHanhDAO {
 
     public void luu(ChinhSachBaoHanh chinhSach, boolean themMoi) throws SQLException {
         kiemTraDuLieu(chinhSach);
-        List<String> dsPhuTung = chinhSach.getDsMaPhuTung();
-        Set<String> dsMaPhuTung = new LinkedHashSet<>(dsPhuTung);
+        List<PhuTung> dsPhuTung = chinhSach.getDsPhuTung();
+        Set<String> dsMaPhuTung = new LinkedHashSet<>();
+        for (PhuTung phuTung : dsPhuTung) {
+            dsMaPhuTung.add(phuTung == null ? null : phuTung.getMaPhuTung());
+        }
         if (dsMaPhuTung.size() != dsPhuTung.size()) {
             throw new SQLException("Danh sách phụ tùng áp dụng bị trùng.");
         }
@@ -100,82 +109,84 @@ public class ChinhSachBaoHanhDAO {
             throw new SQLException("Mã phụ tùng áp dụng không hợp lệ.");
         }
 
-        Connection con = ketNoi();
-        boolean autoCommit = con.getAutoCommit();
-        int isolation = con.getTransactionIsolation();
-        try {
-            con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
-            con.setAutoCommit(false);
-            String maCSBH = chinhSach.getMaCSBH();
-            if (themMoi) {
-                maCSBH = taoMaMoi(con);
-                chinhSach.setMaCSBH(maCSBH);
-                themChinhSach(con, chinhSach);
-            } else {
-                if (maCSBH == null || maCSBH.isBlank()) {
-                    throw new SQLException("Mã chính sách cần cập nhật không được để trống.");
-                }
-                capNhatChinhSach(con, chinhSach);
-            }
-
-            if (chinhSach.isTrangThai()) {
-                kiemTraPhuTungDaCoChinhSach(con, maCSBH, dsMaPhuTung);
-            }
-            try (PreparedStatement ps = con.prepareStatement(
-                    "DELETE FROM ChinhSachBaoHanh_PhuTung WHERE maCSBH = ?")) {
-                ps.setString(1, maCSBH);
-                ps.executeUpdate();
-            }
-            try (PreparedStatement ps = con.prepareStatement(
-                    "INSERT INTO ChinhSachBaoHanh_PhuTung (maCSBH, maPhuTung) VALUES (?, ?)")) {
-                for (String maPhuTung : dsMaPhuTung) {
-                    ps.setString(1, maCSBH);
-                    ps.setString(2, maPhuTung);
-                    ps.addBatch();
-                }
-                ps.executeBatch();
-            }
-            con.commit();
-        } catch (SQLException | RuntimeException exception) {
+        try (Connection con = ketNoi()) {
+            boolean autoCommit = con.getAutoCommit();
+            int isolation = con.getTransactionIsolation();
             try {
-                con.rollback();
-            } catch (SQLException rollbackException) {
-                exception.addSuppressed(rollbackException);
+                con.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
+                con.setAutoCommit(false);
+                String maCSBH = chinhSach.getMaCSBH();
+                if (themMoi) {
+                    maCSBH = taoMaMoi(con);
+                    chinhSach.setMaCSBH(maCSBH);
+                    themChinhSach(con, chinhSach);
+                } else {
+                    if (maCSBH == null || maCSBH.isBlank()) {
+                        throw new SQLException("Mã chính sách cần cập nhật không được để trống.");
+                    }
+                    capNhatChinhSach(con, chinhSach);
+                }
+
+                if (chinhSach.isTrangThai()) {
+                    kiemTraPhuTungDaCoChinhSach(con, maCSBH, dsMaPhuTung);
+                }
+                try (PreparedStatement ps = con.prepareStatement(
+                        "DELETE FROM ChinhSachBaoHanh_PhuTung WHERE maCSBH = ?")) {
+                    ps.setString(1, maCSBH);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = con.prepareStatement(
+                        "INSERT INTO ChinhSachBaoHanh_PhuTung (maCSBH, maPhuTung) VALUES (?, ?)")) {
+                    for (String maPhuTung : dsMaPhuTung) {
+                        ps.setString(1, maCSBH);
+                        ps.setString(2, maPhuTung);
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+                con.commit();
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
+            } finally {
+                con.setAutoCommit(autoCommit);
+                con.setTransactionIsolation(isolation);
             }
-            throw exception;
-        } finally {
-            con.setAutoCommit(autoCommit);
-            con.setTransactionIsolation(isolation);
         }
     }
 
     public boolean xoa(String maCSBH) throws SQLException {
-        Connection con = ketNoi();
-        boolean autoCommit = con.getAutoCommit();
-        try {
-            con.setAutoCommit(false);
-            try (PreparedStatement ps = con.prepareStatement(
-                    "DELETE FROM ChinhSachBaoHanh_PhuTung WHERE maCSBH = ?")) {
-                ps.setString(1, maCSBH);
-                ps.executeUpdate();
-            }
-            int soDong;
-            try (PreparedStatement ps = con.prepareStatement(
-                    "DELETE FROM ChinhSachBaoHanh WHERE maCSBH = ?")) {
-                ps.setString(1, maCSBH);
-                soDong = ps.executeUpdate();
-            }
-            con.commit();
-            return soDong > 0;
-        } catch (SQLException | RuntimeException exception) {
+        try (Connection con = ketNoi()) {
+            boolean autoCommit = con.getAutoCommit();
             try {
-                con.rollback();
-            } catch (SQLException rollbackException) {
-                exception.addSuppressed(rollbackException);
+                con.setAutoCommit(false);
+                try (PreparedStatement ps = con.prepareStatement(
+                        "DELETE FROM ChinhSachBaoHanh_PhuTung WHERE maCSBH = ?")) {
+                    ps.setString(1, maCSBH);
+                    ps.executeUpdate();
+                }
+                int soDong;
+                try (PreparedStatement ps = con.prepareStatement(
+                        "DELETE FROM ChinhSachBaoHanh WHERE maCSBH = ?")) {
+                    ps.setString(1, maCSBH);
+                    soDong = ps.executeUpdate();
+                }
+                con.commit();
+                return soDong > 0;
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
+            } finally {
+                con.setAutoCommit(autoCommit);
             }
-            throw exception;
-        } finally {
-            con.setAutoCommit(autoCommit);
         }
     }
 
@@ -204,7 +215,8 @@ public class ChinhSachBaoHanhDAO {
                 ORDER BY pt.tenPhuTung, pt.maPhuTung
                 """;
         List<PhuTungBaoHanh> dsBaoHanh = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql)) {
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maPhieuSuaChua);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -230,39 +242,50 @@ public class ChinhSachBaoHanhDAO {
         }
         java.util.Map<String, ChinhSachBaoHanh> chinhSachTheoMa = new java.util.HashMap<>();
         for (ChinhSachBaoHanh chinhSach : dsChinhSach) {
-            chinhSach.setDsMaPhuTung(new ArrayList<>());
+            chinhSach.setDsPhuTung(new ArrayList<>());
             chinhSachTheoMa.put(chinhSach.getMaCSBH(), chinhSach);
         }
         String sql = """
-                SELECT maCSBH, maPhuTung
-                FROM ChinhSachBaoHanh_PhuTung
-                ORDER BY maCSBH, maPhuTung
+                SELECT csp.maCSBH, pt.maPhuTung, pt.tenPhuTung, pt.donViTinh,
+                       pt.giaNhap, pt.giaBan, pt.soLuongTon, pt.nhaCungCap, pt.trangThai
+                FROM ChinhSachBaoHanh_PhuTung csp
+                JOIN PhuTung pt ON pt.maPhuTung = csp.maPhuTung
+                ORDER BY csp.maCSBH, pt.maPhuTung
                 """;
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql);
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql);
                 ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 ChinhSachBaoHanh chinhSach = chinhSachTheoMa.get(rs.getString("maCSBH"));
                 if (chinhSach != null) {
-                    List<String> dsMa = chinhSach.getDsMaPhuTung();
-                    dsMa.add(rs.getString("maPhuTung"));
-                    chinhSach.setDsMaPhuTung(dsMa);
+                    List<PhuTung> dsPhuTung = chinhSach.getDsPhuTung();
+                    dsPhuTung.add(new PhuTung(
+                            rs.getString("maPhuTung"),
+                            rs.getString("tenPhuTung"),
+                            rs.getString("donViTinh"),
+                            rs.getDouble("giaNhap"),
+                            rs.getDouble("giaBan"),
+                            rs.getInt("soLuongTon"),
+                            rs.getString("nhaCungCap"),
+                            rs.getString("trangThai")));
+                    chinhSach.setDsPhuTung(dsPhuTung);
                 }
             }
         }
     }
 
     private ChinhSachBaoHanh taoChinhSach(ResultSet rs) throws SQLException {
-        ChinhSachBaoHanh chinhSach = new ChinhSachBaoHanh();
-        chinhSach.setMaCSBH(rs.getString("maCSBH"));
-        chinhSach.setTenChinhSach(rs.getString("tenChinhSach"));
-        chinhSach.setThoiHanBaoHanh(rs.getInt("thoiHanBaoHanh"));
-        chinhSach.setDonViThoiGian(rs.getString("donViThoiGian"));
-        chinhSach.setDieuKienBaoHanh(rs.getString("dieuKienBaoHanh"));
-        chinhSach.setTruongHopTuChoi(rs.getString("truongHopTuChoi"));
-        chinhSach.setNoiDungBaoHanh(rs.getString("noiDungBaoHanh"));
-        chinhSach.setNgayTao(rs.getTimestamp("ngayTao"));
-        chinhSach.setTrangThai(rs.getBoolean("trangThai"));
-        return chinhSach;
+        return new ChinhSachBaoHanh(
+                rs.getString("maCSBH"),
+                rs.getString("tenChinhSach"),
+                rs.getInt("thoiHanBaoHanh"),
+                rs.getString("donViThoiGian"),
+                rs.getString("dieuKienBaoHanh"),
+                rs.getString("truongHopTuChoi"),
+                rs.getString("noiDungBaoHanh"),
+                rs.getTimestamp("ngayTao"),
+                rs.getBoolean("trangThai"),
+                List.of());
     }
 
     private void themChinhSach(Connection con, ChinhSachBaoHanh chinhSach) throws SQLException {
@@ -387,11 +410,6 @@ public class ChinhSachBaoHanhDAO {
     }
 
     private Connection ketNoi() throws SQLException {
-        ConnectDB.getInstance().connect();
-        Connection con = ConnectDB.getConnection();
-        if (con == null) {
-            throw new SQLException("Không thể kết nối cơ sở dữ liệu.");
-        }
-        return con;
+        return DatabaseConnection.open();
     }
 }

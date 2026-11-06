@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -50,12 +52,14 @@ import dao.DichVuDAO;
 import dao.PhieuKiemTraDAO;
 import dao.PhieuSuaChuaDAO;
 import dao.PhuTungDAO;
+import dao.XeDAO;
 import entity.ChiTietPhieuSuaChua;
 import entity.DichVu;
 import entity.PhieuKiemTra;
 import entity.PhieuSuaChua;
 import entity.PhuTung;
 import entity.TaiKhoan;
+import entity.Xe;
 import util.MaTuDong;
 
 public class FrmPhieuSuaChua extends JPanel {
@@ -116,7 +120,9 @@ public class FrmPhieuSuaChua extends JPanel {
     private final DichVuDAO dichVuDAO = new DichVuDAO();
     private final PhuTungDAO phuTungDAO = new PhuTungDAO();
     private final PhieuKiemTraDAO phieuKiemTraDAO = new PhieuKiemTraDAO();
+    private final XeDAO xeDAO = new XeDAO();
     private final TaiKhoan taiKhoanHienTai;
+    private final Map<String, String> bienSoTheoMaXe = new HashMap<>();
 
     private final DecimalFormat df = new DecimalFormat("#,### VNĐ");
 
@@ -200,7 +206,8 @@ public class FrmPhieuSuaChua extends JPanel {
                     boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof PhieuKiemTra phieuKiemTra) {
-                    setText(phieuKiemTra.getMaPhieuKiemTra() + " - " + phieuKiemTra.getMaPhieuTiepNhan());
+                    setText(phieuKiemTra.getMaPhieuKiemTra() + " - "
+                            + bienSoTheoMaXe.getOrDefault(phieuKiemTra.getXe().getMaXe(), ""));
                 }
                 return this;
             }
@@ -214,10 +221,10 @@ public class FrmPhieuSuaChua extends JPanel {
                 txtMaNhanVien.setText("");
                 return;
             }
-            txtMaXe.setText(phieuKiemTra.getMaXe());
-            txtMaKhachHang.setText(phieuKiemTra.getMaKH());
+            txtMaXe.setText(phieuKiemTra.getXe().getMaXe());
+            txtMaKhachHang.setText(phieuKiemTra.getKhachHang().getMaKH());
             String maNV = maNhanVienDangNhap();
-            txtMaNhanVien.setText(maNV.isEmpty() ? phieuKiemTra.getMaNV() : maNV);
+            txtMaNhanVien.setText(maNV.isEmpty() ? phieuKiemTra.getNhanVien().getMaNV() : maNV);
         });
 
         napDanhSachPhieuSuaChua();
@@ -274,14 +281,6 @@ public class FrmPhieuSuaChua extends JPanel {
         JLabel lblTitle = createSectionLabel("Thông tin phiếu sửa chữa");
         JPanel pnlField = new JPanel(new GridBagLayout());
         pnlField.setOpaque(false);
-        addField(pnlField, "Mã phiếu sửa chữa", txtMaPhieuSuaChua, 0, 0);
-        addField(pnlField, "Mã phiếu kiểm tra", cboPhieuKiemTra, 0, 1);
-        addField(pnlField, "Mã xe", txtMaXe, 0, 2);
-        addField(pnlField, "Mã khách hàng", txtMaKhachHang, 0, 3);
-        addField(pnlField, "Mã nhân viên", txtMaNhanVien, 0, 4);
-        addField(pnlField, "Ngày bắt đầu *", txtNgayBatDau, 0, 5);
-        addField(pnlField, "Ngày hoàn thành dự kiến *", txtNgayHoanThanhDuKien, 0, 6);
-        addField(pnlField, "Trạng thái", cboTrangThai, 0, 7);
         addField(pnlField, "Mã phiếu sửa chữa (tự động)", txtMaPhieuSuaChua, 0, 0);
         addField(pnlField, "Mã phiếu kiểm tra", cboPhieuKiemTra, 2, 0);
         addField(pnlField, "Mã xe", txtMaXe, 0, 1);
@@ -656,6 +655,12 @@ public class FrmPhieuSuaChua extends JPanel {
     private void napDanhSachPhieuKiemTra() {
         try {
             List<PhieuKiemTra> danhSach = phieuKiemTraDAO.findAll();
+            Map<String, String> bienSoMoi = new HashMap<>();
+            for (Xe xe : xeDAO.findAll()) {
+                bienSoMoi.put(xe.getMaXe(), xe.getBienSo());
+            }
+            bienSoTheoMaXe.clear();
+            bienSoTheoMaXe.putAll(bienSoMoi);
             cboPhieuKiemTra.removeAll();
             for (PhieuKiemTra phieuKiemTra : danhSach) {
                 cboPhieuKiemTra.addItem(phieuKiemTra);
@@ -829,9 +834,10 @@ public class FrmPhieuSuaChua extends JPanel {
     }
 
     private String maNhanVienDangNhap() {
-        return taiKhoanHienTai == null || taiKhoanHienTai.getMaNV() == null
+        return taiKhoanHienTai == null || taiKhoanHienTai.getNhanVien() == null
+                || taiKhoanHienTai.getNhanVien().getMaNV() == null
                 ? ""
-                : taiKhoanHienTai.getMaNV().trim();
+                : taiKhoanHienTai.getNhanVien().getMaNV().trim();
     }
 
     private void hienThiDaChon() {

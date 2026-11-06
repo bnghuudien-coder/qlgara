@@ -1,6 +1,7 @@
 package gui;
 
 import dao.PhuTungDAO;
+import dao.ThongKeNhapXuatKhoDAO;
 import entity.PhuTung;
 
 import java.awt.BorderLayout;
@@ -10,7 +11,11 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.sql.SQLException;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.TemporalAdjusters;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.Comparator;
@@ -39,10 +44,15 @@ public class FrmThongKeTonKho extends JPanel {
     private static final Color COLOR_WARNING = new Color(217, 119, 6);     
     private static final Color COLOR_SUCCESS = new Color(22, 163, 74);     
     private final PhuTungDAO phuTungDAO = new PhuTungDAO();
+    private final ThongKeNhapXuatKhoDAO thongKeNhapXuatKhoDAO = new ThongKeNhapXuatKhoDAO();
 
     // COMPONENTS
     private JComboBox<String> cboLocPhuTung;
     private JButton btnLoc;
+    private JComboBox<String> cboKyNhap;
+    private JComboBox<String> cboKyXuat;
+    private DefaultTableModel modelThongKeNhap;
+    private DefaultTableModel modelThongKeXuat;
     
     private JLabel lblTieuDeBang, lblPhuDeBang, lblCanNhapThem;
     private DefaultTableModel modelTonKho;
@@ -150,9 +160,18 @@ public class FrmThongKeTonKho extends JPanel {
         JScrollPane scrollPane = new JScrollPane(tblTonKho);
         scrollPane.setBorder(BorderFactory.createEmptyBorder());
         scrollPane.getViewport().setBackground(COLOR_PANEL_BG);
+        scrollPane.setPreferredSize(new Dimension(0, 260));
         pnlCenter.add(scrollPane, BorderLayout.CENTER);
 
-        add(pnlCenter, BorderLayout.CENTER);
+        JPanel pnlNoiDung = new JPanel(new BorderLayout(0, 12));
+        pnlNoiDung.setBackground(COLOR_BG_MAIN);
+        pnlNoiDung.add(pnlCenter, BorderLayout.CENTER);
+        pnlNoiDung.add(createThongKeNhapXuatPanel(), BorderLayout.SOUTH);
+        JScrollPane scrNoiDung = new JScrollPane(pnlNoiDung);
+        scrNoiDung.setBorder(BorderFactory.createEmptyBorder());
+        scrNoiDung.getViewport().setBackground(COLOR_BG_MAIN);
+        scrNoiDung.getVerticalScrollBar().setUnitIncrement(16);
+        add(scrNoiDung, BorderLayout.CENTER);
 
         // 3. FOOTER
         JPanel pnlFooter = new JPanel(new BorderLayout());
@@ -170,6 +189,65 @@ public class FrmThongKeTonKho extends JPanel {
         pnlFooter.add(lblFooterLeft, BorderLayout.WEST);
         pnlFooter.add(lblFooterRight, BorderLayout.EAST);
         add(pnlFooter, BorderLayout.SOUTH);
+    }
+
+    private JPanel createThongKeNhapXuatPanel() {
+        JPanel pnlThongKe = new JPanel(new java.awt.GridLayout(1, 2, 12, 0));
+        pnlThongKe.setBackground(COLOR_BG_MAIN);
+        pnlThongKe.add(createKhungThongKe("Thống kê nhập kho", "Nhập", true));
+        pnlThongKe.add(createKhungThongKe("Thống kê xuất kho", "Xuất", false));
+        return pnlThongKe;
+    }
+
+    private JPanel createKhungThongKe(String tieuDe, String kieuPhieu, boolean laNhap) {
+        JPanel pnlKhung = new JPanel(new BorderLayout(0, 8));
+        pnlKhung.setBackground(COLOR_PANEL_BG);
+        pnlKhung.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(COLOR_BORDER),
+                new EmptyBorder(10, 12, 10, 12)));
+
+        JPanel pnlHeaderKhung = new JPanel(new BorderLayout(8, 0));
+        pnlHeaderKhung.setBackground(COLOR_PANEL_BG);
+        JLabel lblTieuDeKhung = new JLabel(tieuDe);
+        lblTieuDeKhung.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        lblTieuDeKhung.setForeground(laNhap ? COLOR_SUCCESS : COLOR_PRIMARY);
+        JComboBox<String> cboKy = new JComboBox<>(new String[] {"Tuần này", "Tháng này", "Năm nay"});
+        cboKy.setPreferredSize(new Dimension(130, 30));
+        pnlHeaderKhung.add(lblTieuDeKhung, BorderLayout.WEST);
+        pnlHeaderKhung.add(cboKy, BorderLayout.EAST);
+
+        DefaultTableModel model = new DefaultTableModel(
+                new Object[] {"Mã phụ tùng", "Tên phụ tùng", "Đơn vị", "Số lượng"}, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        JTable tblThongKe = new JTable(model);
+        tblThongKe.setRowHeight(28);
+        tblThongKe.setFillsViewportHeight(true);
+        tblThongKe.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        tblThongKe.getTableHeader().setBackground(new Color(248, 250, 252));
+        tblThongKe.getColumnModel().getColumn(0).setPreferredWidth(95);
+        tblThongKe.getColumnModel().getColumn(1).setPreferredWidth(180);
+        tblThongKe.getColumnModel().getColumn(2).setPreferredWidth(65);
+        tblThongKe.getColumnModel().getColumn(3).setPreferredWidth(80);
+
+        JScrollPane scrThongKe = new JScrollPane(tblThongKe);
+        scrThongKe.setPreferredSize(new Dimension(0, 190));
+        scrThongKe.setBorder(BorderFactory.createLineBorder(COLOR_BORDER));
+        pnlKhung.add(pnlHeaderKhung, BorderLayout.NORTH);
+        pnlKhung.add(scrThongKe, BorderLayout.CENTER);
+
+        if (laNhap) {
+            cboKyNhap = cboKy;
+            modelThongKeNhap = model;
+        } else {
+            cboKyXuat = cboKy;
+            modelThongKeXuat = model;
+        }
+        cboKy.addActionListener(event -> taiThongKeNhapXuat(kieuPhieu, cboKy, model));
+        return pnlKhung;
     }
 
     private JPanel createLegendPanel() {
@@ -209,6 +287,56 @@ public class FrmThongKeTonKho extends JPanel {
     }
     private void napDuLieuBanDau() {
         taiDuLieuVaoBang("Tất cả phụ tùng");
+        taiThongKeNhapXuat("Nhập", cboKyNhap, modelThongKeNhap);
+        taiThongKeNhapXuat("Xuất", cboKyXuat, modelThongKeXuat);
+    }
+
+    private void taiThongKeNhapXuat(
+            String kieuPhieu, JComboBox<String> cboKy, DefaultTableModel model) {
+        String ky = (String) cboKy.getSelectedItem();
+        if (ky == null) {
+            return;
+        }
+
+        LocalDate homNay = LocalDate.now();
+        LocalDate tuNgay;
+        LocalDate denNgay;
+        switch (ky) {
+            case "Tuần này" -> {
+                tuNgay = homNay.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                denNgay = tuNgay.plusWeeks(1);
+            }
+            case "Tháng này" -> {
+                tuNgay = homNay.withDayOfMonth(1);
+                denNgay = tuNgay.plusMonths(1);
+            }
+            case "Năm nay" -> {
+                tuNgay = homNay.withDayOfYear(1);
+                denNgay = tuNgay.plusYears(1);
+            }
+            default -> throw new IllegalArgumentException("Kỳ thống kê không hợp lệ: " + ky);
+        }
+
+        try {
+            List<ThongKeNhapXuatKhoDAO.ThongKePhuTung> danhSach =
+                    thongKeNhapXuatKhoDAO.layThongKe(tuNgay, denNgay, kieuPhieu);
+            model.setRowCount(0);
+            for (ThongKeNhapXuatKhoDAO.ThongKePhuTung phuTung : danhSach) {
+                model.addRow(new Object[] {
+                        phuTung.maPhuTung(),
+                        phuTung.tenPhuTung(),
+                        phuTung.donViTinh() == null ? "—" : phuTung.donViTinh(),
+                        phuTung.soLuong()
+                });
+            }
+        } catch (SQLException exception) {
+            javax.swing.JOptionPane.showMessageDialog(
+                    this,
+                    "Không thể tải thống kê " + kieuPhieu.toLowerCase() + " kho: "
+                            + exception.getMessage(),
+                    "Thống kê nhập xuất kho",
+                    javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void taiDuLieuVaoBang(String tieuChiLoc) {
@@ -264,6 +392,8 @@ public class FrmThongKeTonKho extends JPanel {
         btnLoc.addActionListener(e -> {
             String tieuChi = cboLocPhuTung.getSelectedItem().toString();
             taiDuLieuVaoBang(tieuChi);
+            taiThongKeNhapXuat("Nhập", cboKyNhap, modelThongKeNhap);
+            taiThongKeNhapXuat("Xuất", cboKyXuat, modelThongKeXuat);
         });
     }
     // Hàm đổi màu chữ theo tồn kho

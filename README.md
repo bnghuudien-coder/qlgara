@@ -2,17 +2,25 @@
 
 ## Khởi tạo cơ sở dữ liệu SQL Server
 
-Để tạo database mới và nạp dữ liệu mẫu, chạy lần lượt hai file trong SQL Server Management Studio:
+Để tạo lại database và nạp dữ liệu mẫu, chạy lần lượt hai file trong SQL Server Management Studio:
 
-1. `database/QuanLyGaraOto.sql` — tạo database `a1` và toàn bộ bảng.
+1. `database/QuanLyGaraOto.sql` — xóa database `a1` nếu đã tồn tại, sau đó tạo lại database và toàn bộ bảng.
 2. `database/DuLieuMau.sql` — nạp dữ liệu mẫu vào database `a1`.
 
-Chỉ chạy file dữ liệu mẫu sau khi tạo schema thành công. File dữ liệu mẫu không cho phép chạy lặp để tránh trùng dữ liệu.
+**Cảnh báo:** Bước 1 xóa toàn bộ dữ liệu hiện có trong database `a1`. Chỉ chạy khi bạn muốn tạo lại database; hãy sao lưu dữ liệu cần giữ trước. Chỉ chạy file dữ liệu mẫu sau khi tạo schema thành công. File dữ liệu mẫu không cho phép chạy lặp để tránh trùng dữ liệu.
 
-Hai script trên đã bao gồm bảng chính sách bảo hành, bảng phụ tùng áp dụng chính sách và bảng phiếu yêu cầu bảo hành, cùng dữ liệu mẫu để thử tiếp nhận, chấp nhận, hoàn thành và từ chối yêu cầu.
+Bộ dữ liệu mẫu mở rộng bao gồm khách hàng và nhiều xe, tài khoản/nhân viên/lịch làm việc, phụ tùng/tồn kho, dịch vụ/khuyến mãi, tiếp nhận/kiểm tra/sửa chữa, hóa đơn và giao dịch thanh toán, bảo hành/đổi trả/bàn giao. Dữ liệu có nhiều trạng thái và mốc thời gian để thử báo cáo, công nợ, tồn kho và các luồng xử lý.
 
-Nếu database `a1` đã có schema cũ, không chạy lại file tạo database. Chạy `database/Migration_ChiTietHoaDon.sql` một lần để cập nhật cấu trúc chi tiết phiếu sửa chữa và hóa đơn.
+Tài khoản demo: `NV001` đến `NV008` dùng mật khẩu `123456`; `NV009` và `NV010` dùng mật khẩu `654321`.
+
+Các ca mẫu: `CA001` 07:00–11:00, `CA002` 13:00–17:00, `CA003` 18:00–22:00.
+
+Nếu không muốn xóa database hiện có, không chạy script tạo lại ở trên. Với database cũ, chạy `database/Migration_ChiTietHoaDon.sql` một lần để cập nhật cấu trúc chi tiết phiếu sửa chữa và hóa đơn.
 
 Các bảng chính sách bảo hành và phiếu yêu cầu bảo hành chỉ được tạo trong script khởi tạo database mới; nếu đang dùng database cũ, hãy tạo lại database và nạp lại dữ liệu mẫu để sử dụng đầy đủ các chức năng này.
 
-Các ràng buộc `NOT NULL` mới cũng chỉ áp dụng khi khởi tạo schema mới. Hãy tạo lại database `a1`, sau đó chạy lại `QuanLyGaraOto.sql` và `DuLieuMau.sql` theo đúng thứ tự; không chạy script tạo schema trên database đã có bảng.
+Các ràng buộc `NOT NULL` mới cũng chỉ áp dụng khi khởi tạo schema mới. Để tạo lại toàn bộ database `a1`, chạy `QuanLyGaraOto.sql` rồi `DuLieuMau.sql` theo đúng thứ tự.
+
+## Cấu hình kết nối cho các DAO đã tách khỏi `BaseDAO`/`ConnectDB`
+
+Các DAO `CaLamViecDAO`, `ChinhSachBaoHanhDAO`, `PhieuYeuCauBaoHanhDAO`, `NhanVienDAO`, `LichLamViecDAO`, `KhachHangDAO`, `PhieuTiepNhanDAO`, `PhieuKiemTraDAO`, `TaiKhoanDAO` và `PhieuBanGiaoDAO` mở kết nối riêng cho từng thao tác, không dùng `BaseDAO` hoặc kết nối dùng chung. Cấu hình nằm trong `database.properties` ở thư mục gốc; file này được Git bỏ qua để thông tin đăng nhập không bị commit. Nếu cần cấu hình lại, sao chép `database.properties.example` thành `database.properties` rồi nhập đúng URL, user và mật khẩu SQL Server. Các biến môi trường `GARA_DB_URL`, `GARA_DB_USER`, `GARA_DB_PASSWORD` hoặc Java system properties tương ứng vẫn được ưu tiên nếu đã thiết lập.

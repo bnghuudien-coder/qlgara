@@ -1,31 +1,24 @@
 package gui;
 
-import dao.NhanVienDAO;
+import controller.NhanVienController;
 import entity.NhanVien;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.RowFilter;
 import javax.swing.ListSelectionModel;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import javax.swing.SwingUtilities;
-import util.MaTuDong;
 
-public class FrmNhanVien extends JPanel implements ActionListener {
-    private final NhanVienDAO nhanVienDAO = new NhanVienDAO();
+public class FrmNhanVien extends JPanel {
+    private final NhanVienController controller = new NhanVienController(this);
     private final AppTextField txtMaNV = new AppTextField(16);
     private final AppTextField txtHoTen = new AppTextField(16);
     private final AppTextField txtSoDienThoai = new AppTextField(16);
@@ -47,6 +40,11 @@ public class FrmNhanVien extends JPanel implements ActionListener {
     };
     private final javax.swing.JTable tblNhanVien = FormUI.createTable(modelNhanVien);
     private final TableRowSorter<DefaultTableModel> sorterNhanVien = new TableRowSorter<>(modelNhanVien);
+    private final AppButton btnThem = new AppButton("Thêm nhân viên");
+    private final AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
+    private final AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
+    private final AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
+    private final AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
 
     public FrmNhanVien() {
         setLayout(new BorderLayout(0, 10));
@@ -78,13 +76,7 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         for (int cot = 0; cot < doRongCot.length; cot++) {
             tblNhanVien.getColumnModel().getColumn(cot).setPreferredWidth(doRongCot[cot]);
         }
-        tblNhanVien.getSelectionModel().addListSelectionListener(event -> {
-            if (!event.getValueIsAdjusting() && tblNhanVien.getSelectedRow() >= 0) {
-                hienThiNhanVienDangChon();
-            }
-        });
-        taiDanhSachNhanVien();
-        lamMoiThongTinNhanVien();
+        controller.khoiTao();
     }
 
     private JPanel createSearchToolbar() {
@@ -96,14 +88,8 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         pnlLoc.add(createSearchField("Họ và tên", txtLocHoTen));
         pnlLoc.add(createSearchField("Số điện thoại", txtLocSoDienThoai));
         pnlLoc.add(createSearchField("Email", txtLocEmail));
-        AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
-        btnTaiLai.addActionListener(this);
         pnlSearch.add(pnlLoc, BorderLayout.CENTER);
         pnlSearch.add(btnTaiLai, BorderLayout.EAST);
-        themBoLangNghe(txtLocMaNV);
-        themBoLangNghe(txtLocHoTen);
-        themBoLangNghe(txtLocSoDienThoai);
-        themBoLangNghe(txtLocEmail);
         return pnlSearch;
     }
 
@@ -123,25 +109,6 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         return pnlStatus;
     }
 
-    private void themBoLangNghe(AppTextField txtField) {
-        txtField.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent event) {
-                locDanhSachNhanVien();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent event) {
-                locDanhSachNhanVien();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent event) {
-                locDanhSachNhanVien();
-            }
-        });
-    }
-
     private JPanel createFormCard() {
         AppPanel pnlCard = FormUI.createCard();
         pnlCard.setLayout(new BorderLayout(0, 6));
@@ -158,14 +125,6 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         cboTrangThai.setModel(new DefaultComboBoxModel<>(
                 new String[] {"Đang làm việc", "Tạm nghỉ", "Đã nghỉ việc"}));
 
-        AppButton btnThem = new AppButton("Thêm nhân viên");
-        AppButton btnCapNhat = new AppButton("Cập nhật", AppButton.Style.SUCCESS);
-        AppButton btnXoa = new AppButton("Xóa", AppButton.Style.DANGER);
-        AppButton btnLamMoi = new AppButton("Làm mới", AppButton.Style.SECONDARY);
-        btnThem.addActionListener(this);
-        btnCapNhat.addActionListener(this);
-        btnXoa.addActionListener(this);
-        btnLamMoi.addActionListener(this);
         JPanel pnlButtons = FormUI.createButtonRow(btnThem, btnCapNhat, btnXoa, btnLamMoi);
         pnlCard.add(FormUI.createSectionTitle("Thông tin nhân viên"), BorderLayout.NORTH);
         pnlCard.add(pnlFields, BorderLayout.CENTER);
@@ -244,43 +203,7 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         return true;
     }
 
-    private void themNhanVien() {
-        if (!validateForm()) {
-            return;
-        }
-
-        NhanVien nhanVien = new NhanVien();
-        nhanVien.setMaNV(txtMaNV.getText().trim());
-        nhanVien.setHoTen(txtHoTen.getText().trim());
-        nhanVien.setChucVu((String) cboChucVu.getSelectedItem());
-        nhanVien.setSoDT(txtSoDienThoai.getText().trim());
-        nhanVien.setEmail(txtEmail.getText().trim());
-        nhanVien.setTrangThai((String) cboTrangThai.getSelectedItem());
-
-        try {
-            if (!nhanVienDAO.insert(nhanVien)) {
-                FormUI.showError("Không thêm được nhân viên vào cơ sở dữ liệu.");
-                return;
-            }
-            taiDanhSachNhanVien();
-            lamMoiForm();
-            JOptionPane.showMessageDialog(this, "Đã thêm nhân viên thành công.",
-                    "Thêm nhân viên", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            FormUI.showError("Không thể thêm nhân viên: " + exception.getMessage());
-        }
-    }
-
-    private void taiDanhSachNhanVien() {
-        try {
-            hienThiDanhSach(nhanVienDAO.findAll());
-            locDanhSachNhanVien();
-        } catch (SQLException exception) {
-            FormUI.showError("Không thể tải danh sách nhân viên: " + exception.getMessage());
-        }
-    }
-
-    private void hienThiDanhSach(List<NhanVien> danhSachNhanVien) {
+    public void hienThiDanhSach(List<NhanVien> danhSachNhanVien) {
         modelNhanVien.setRowCount(0);
         for (NhanVien nhanVien : danhSachNhanVien) {
             modelNhanVien.addRow(new Object[] {
@@ -290,7 +213,7 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         }
     }
 
-    private void locDanhSachNhanVien() {
+    public void locDanhSachNhanVien() {
         List<RowFilter<Object, Object>> filters = new ArrayList<>();
         themBoLoc(filters, txtLocMaNV.getText(), 0);
         themBoLoc(filters, txtLocHoTen.getText(), 1);
@@ -308,7 +231,7 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         }
     }
 
-    private void hienThiNhanVienDangChon() {
+    public void hienThiNhanVienDangChon() {
         int viewRow = tblNhanVien.getSelectedRow();
         if (viewRow < 0) {
             return;
@@ -328,67 +251,23 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         return giaTri == null ? "" : giaTri.toString();
     }
 
-    private void lamMoiForm() {
+    public void lamMoiBieuMau(String maMoi) {
         tblNhanVien.clearSelection();
         maNVDangChon = null;
-        lamMoiThongTinNhanVien();
-        txtLocMaNV.setText("");
-        txtLocHoTen.setText("");
-        txtLocSoDienThoai.setText("");
-        txtLocEmail.setText("");
-        taiDanhSachNhanVien();
-    }
-
-    private void lamMoiThongTinNhanVien() {
-        try {
-            txtMaNV.setText(MaTuDong.sinhMa(
-                    MaTuDong.TIEN_TO_NHAN_VIEN,
-                    nhanVienDAO.findAll(),
-                    NhanVien::getMaNV));
-        } catch (SQLException exception) {
-            txtMaNV.setText("");
-            FormUI.showError("Không thể phát sinh mã nhân viên: " + exception.getMessage());
-        }
+        txtMaNV.setText(maMoi);
         txtMaNV.setEnabled(true);
         txtHoTen.setText("");
         txtSoDienThoai.setText("");
         txtEmail.setText("");
         cboChucVu.setSelectedIndex(0);
         cboTrangThai.setSelectedIndex(0);
+        txtLocMaNV.setText("");
+        txtLocHoTen.setText("");
+        txtLocSoDienThoai.setText("");
+        txtLocEmail.setText("");
     }
 
-    public void capNhatNhanVien() {
-        if (maNVDangChon == null) {
-            FormUI.showError("Vui lòng chọn hoặc tìm một nhân viên trước khi cập nhật.");
-            return;
-        }
-        if (!validateForm()) {
-            return;
-        }
-
-        NhanVien nhanVien = new NhanVien();
-        nhanVien.setMaNV(maNVDangChon);
-        nhanVien.setHoTen(txtHoTen.getText().trim());
-        nhanVien.setChucVu((String) cboChucVu.getSelectedItem());
-        nhanVien.setSoDT(txtSoDienThoai.getText().trim());
-        nhanVien.setEmail(txtEmail.getText().trim());
-        nhanVien.setTrangThai((String) cboTrangThai.getSelectedItem());
-
-        try {
-            if (!nhanVienDAO.update(nhanVien)) {
-                FormUI.showError("Không cập nhật được nhân viên trong cơ sở dữ liệu.");
-                return;
-            }
-            taiDanhSachNhanVien();
-            hienThiNhanVienTheoMa(nhanVien.getMaNV());
-            JOptionPane.showMessageDialog(this, "Đã cập nhật nhân viên thành công.",
-                    "Cập nhật nhân viên", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            FormUI.showError("Không thể cập nhật nhân viên: " + exception.getMessage());
-        }
-    }
-
-    private void hienThiNhanVienTheoMa(String maNV) {
+    public void chonNhanVienTheoMa(String maNV) {
         for (int modelRow = 0; modelRow < modelNhanVien.getRowCount(); modelRow++) {
             if (maNV.equals(modelNhanVien.getValueAt(modelRow, 0))) {
                 int viewRow = tblNhanVien.convertRowIndexToView(modelRow);
@@ -400,50 +279,37 @@ public class FrmNhanVien extends JPanel implements ActionListener {
         }
     }
 
-    public void xoaNhanVien() {
-        int selectedRow = tblNhanVien.getSelectedRow();
-        if (selectedRow == -1) {
-            FormUI.showError("Vui lòng chọn một nhân viên để xóa.");
-            return;
-        }
-        int modelRow = tblNhanVien.convertRowIndexToModel(selectedRow);
-        String maNV = (String) modelNhanVien.getValueAt(modelRow, 0);
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Bạn có chắc chắn muốn xóa nhân viên có mã: " + maNV + "?",
-                "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
-        if (confirm != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        try {
-            if (!nhanVienDAO.deleteById(maNV)) {
-                FormUI.showError("Không xóa được nhân viên khỏi cơ sở dữ liệu.");
-                return;
-            }
-            taiDanhSachNhanVien();
-            lamMoiForm();
-            JOptionPane.showMessageDialog(this, "Đã xóa nhân viên thành công.",
-                    "Xóa nhân viên", JOptionPane.INFORMATION_MESSAGE);
-        } catch (SQLException exception) {
-            FormUI.showError("Không thể xóa nhân viên: " + exception.getMessage());
-        }
+    public NhanVien taoNhanVien() {
+        return new NhanVien(
+                txtMaNV.getText().trim(),
+                txtHoTen.getText().trim(),
+                (String) cboChucVu.getSelectedItem(),
+                txtSoDienThoai.getText().trim(),
+                txtEmail.getText().trim(),
+                (String) cboTrangThai.getSelectedItem());
     }
 
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        String actionCommand = e.getActionCommand();
-        if ("Thêm nhân viên".equals(actionCommand)) {
-            themNhanVien();
-        } 
-        else if ("Làm mới".equals(actionCommand)) {
-            lamMoiForm();
-        }
-        else if("Cập nhật".equals(actionCommand)) {
-            capNhatNhanVien();
-        } else if ("Tải lại".equals(actionCommand)) {
-            lamMoiForm();
-        } else if ("Xóa".equals(actionCommand)) {
-            xoaNhanVien();
-        }
+    public String getMaNVDangChon() {
+        return maNVDangChon;
     }
+
+    public AppButton getBtnThem() { return btnThem; }
+    public AppButton getBtnCapNhat() { return btnCapNhat; }
+    public AppButton getBtnXoa() { return btnXoa; }
+    public AppButton getBtnLamMoi() { return btnLamMoi; }
+    public AppButton getBtnTaiLai() { return btnTaiLai; }
+    public javax.swing.JTable getTblNhanVien() { return tblNhanVien; }
+    public AppTextField getTxtLocMaNV() { return txtLocMaNV; }
+    public AppTextField getTxtLocHoTen() { return txtLocHoTen; }
+    public AppTextField getTxtLocSoDienThoai() { return txtLocSoDienThoai; }
+    public AppTextField getTxtLocEmail() { return txtLocEmail; }
+
+    public void hienThiLoi(String noiDung) {
+        FormUI.showError(noiDung);
+    }
+
+    public void thongBaoThanhCong(String noiDung, String tieuDe) {
+        javax.swing.JOptionPane.showMessageDialog(this, noiDung, tieuDe, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+    }
+
 }

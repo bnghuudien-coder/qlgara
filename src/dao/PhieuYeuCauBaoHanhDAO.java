@@ -1,8 +1,11 @@
 package dao;
 
-import connectDB.ConnectDB;
 import entity.PhieuYeuCauBaoHanh;
+import entity.HoaDon;
+import entity.PhuTung;
+import util.DatabaseConnection;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -48,7 +51,8 @@ public class PhieuYeuCauBaoHanhDAO {
 
     public String layMaTiepTheo() throws SQLException {
         int maLonNhat = 0;
-        try (PreparedStatement ps = ketNoi().prepareStatement("""
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement("""
                 SELECT maPhieuYCBH
                 FROM PhieuYeuCauBaoHanh
                 WHERE maPhieuYCBH LIKE 'YCBH%'
@@ -90,7 +94,8 @@ public class PhieuYeuCauBaoHanhDAO {
                 """;
         String keyword = tuKhoa == null ? "" : tuKhoa.trim();
         List<YeuCauHienThi> dsYeuCau = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql)) {
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, keyword);
             for (int i = 2; i <= 8; i++) {
                 ps.setString(i, "%" + keyword + "%");
@@ -116,7 +121,7 @@ public class PhieuYeuCauBaoHanhDAO {
         return dsYeuCau;
     }
 
-    public List<LuaChonHoaDon> layHoaDonConHanBaoHanh() throws SQLException {
+    public List<LuaChonHoaDon> layHoaDonCoBaoHanh() throws SQLException {
         String sql = """
                 SELECT DISTINCT hd.maHoaDon, kh.hoTen, hd.ngayLap
                 FROM HoaDon hd
@@ -128,17 +133,12 @@ public class PhieuYeuCauBaoHanhDAO {
                     JOIN ChinhSachBaoHanh_PhuTung csp ON csp.maPhuTung = cthd.maPhuTung
                     JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH AND cs.trangThai = 1
                     WHERE cthd.maHoaDon = hd.maHoaDon
-                      AND CAST(GETDATE() AS DATE) <= CAST(
-                          CASE cs.donViThoiGian
-                              WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                              WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                              ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                          END AS DATE)
                 )
                 ORDER BY hd.ngayLap DESC, hd.maHoaDon DESC
                 """;
         List<LuaChonHoaDon> dsHoaDon = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql);
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql);
                 ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 dsHoaDon.add(new LuaChonHoaDon(
@@ -148,7 +148,7 @@ public class PhieuYeuCauBaoHanhDAO {
         return dsHoaDon;
     }
 
-    public List<LuaChonPhuTung> layPhuTungConHanTheoHoaDon(String maHoaDon) throws SQLException {
+    public List<LuaChonPhuTung> layPhuTungTheoHoaDon(String maHoaDon) throws SQLException {
         String sql = """
                 SELECT cthd.maPhuTung, pt.tenPhuTung, SUM(cthd.soLuong) AS soLuongHoaDon,
                        cs.thoiHanBaoHanh, cs.donViThoiGian
@@ -160,12 +160,6 @@ public class PhieuYeuCauBaoHanhDAO {
                     FROM ChinhSachBaoHanh_PhuTung csp
                     JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH
                     WHERE csp.maPhuTung = cthd.maPhuTung AND cs.trangThai = 1
-                      AND CAST(GETDATE() AS DATE) <= CAST(
-                          CASE cs.donViThoiGian
-                              WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                              WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                              ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                          END AS DATE)
                     ORDER BY cs.ngayTao DESC, cs.maCSBH DESC
                 ) cs
                 WHERE cthd.maHoaDon = ?
@@ -173,7 +167,8 @@ public class PhieuYeuCauBaoHanhDAO {
                 ORDER BY pt.tenPhuTung, cthd.maPhuTung
                 """;
         List<LuaChonPhuTung> dsPhuTung = new ArrayList<>();
-        try (PreparedStatement ps = ketNoi().prepareStatement(sql)) {
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, maHoaDon);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -192,7 +187,7 @@ public class PhieuYeuCauBaoHanhDAO {
     public void them(PhieuYeuCauBaoHanh yeuCau) throws SQLException {
         kiemTraYeuCau(yeuCau);
         giaoDich(con -> {
-            kiemTraPhuTungDuocBaoHanh(con, yeuCau.getMaHoaDon(), yeuCau.getMaPhuTung(),
+            kiemTraPhuTungDuocBaoHanh(con, maHoaDon(yeuCau), maPhuTung(yeuCau),
                     yeuCau.getSoLuong(), true);
             String maPhieu = taoMaMoi(con);
             String sql = """
@@ -202,8 +197,8 @@ public class PhieuYeuCauBaoHanhDAO {
                     """;
             try (PreparedStatement ps = con.prepareStatement(sql)) {
                 ps.setString(1, maPhieu);
-                ps.setString(2, yeuCau.getMaHoaDon());
-                ps.setString(3, yeuCau.getMaPhuTung());
+                ps.setString(2, maHoaDon(yeuCau));
+                ps.setString(3, maPhuTung(yeuCau));
                 ps.setInt(4, yeuCau.getSoLuong());
                 ps.setString(5, yeuCau.getLyDo());
                 ps.executeUpdate();
@@ -227,11 +222,15 @@ public class PhieuYeuCauBaoHanhDAO {
                     if (!rs.next()) {
                         throw new SQLException("Chỉ có thể cập nhật yêu cầu đang chờ xử lý.");
                     }
-                    yeuCau.setMaHoaDon(rs.getString("maHoaDon"));
-                    yeuCau.setMaPhuTung(rs.getString("maPhuTung"));
+                    HoaDon hoaDon = new HoaDon();
+                    hoaDon.setMaHoaDon(rs.getString("maHoaDon"));
+                    PhuTung phuTung = new PhuTung();
+                    phuTung.setMaPhuTung(rs.getString("maPhuTung"));
+                    yeuCau.setHoaDon(hoaDon);
+                    yeuCau.setPhuTung(phuTung);
                 }
             }
-            kiemTraPhuTungDuocBaoHanh(con, yeuCau.getMaHoaDon(), yeuCau.getMaPhuTung(),
+            kiemTraPhuTungDuocBaoHanh(con, maHoaDon(yeuCau), maPhuTung(yeuCau),
                     yeuCau.getSoLuong(), false);
             try (PreparedStatement ps = con.prepareStatement("""
                     UPDATE PhieuYeuCauBaoHanh
@@ -250,7 +249,8 @@ public class PhieuYeuCauBaoHanhDAO {
     }
 
     public boolean xoaChoXuLy(String maPhieuYCBH) throws SQLException {
-        try (PreparedStatement ps = ketNoi().prepareStatement(
+        try (Connection con = ketNoi();
+                PreparedStatement ps = con.prepareStatement(
                 "DELETE FROM PhieuYeuCauBaoHanh WHERE maPhieuYCBH = ? AND trangThai = N'Chờ xử lý'")) {
             ps.setString(1, maPhieuYCBH);
             return ps.executeUpdate() > 0;
@@ -343,19 +343,20 @@ public class PhieuYeuCauBaoHanhDAO {
                   SELECT SUM(cthd.soLuong) AS soLuongHoaDon
                   FROM ChiTietHoaDon cthd
                   JOIN HoaDon hd ON hd.maHoaDon = cthd.maHoaDon
+                  CROSS APPLY (
+                      SELECT TOP (1) cs.thoiHanBaoHanh, cs.donViThoiGian
+                      FROM ChinhSachBaoHanh_PhuTung csp
+                      JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH
+                      WHERE csp.maPhuTung = cthd.maPhuTung AND cs.trangThai = 1
+                      ORDER BY cs.ngayTao DESC, cs.maCSBH DESC
+                  ) cs
                   WHERE cthd.maHoaDon = ? AND cthd.maPhuTung = ?
-                    AND EXISTS (
-                        SELECT 1
-                        FROM ChinhSachBaoHanh_PhuTung csp
-                        JOIN ChinhSachBaoHanh cs ON cs.maCSBH = csp.maCSBH AND cs.trangThai = 1
-                        WHERE csp.maPhuTung = cthd.maPhuTung
-                          AND CAST(GETDATE() AS DATE) <= CAST(
-                              CASE cs.donViThoiGian
-                                  WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
-                                  WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
-                                  ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
-                              END AS DATE)
-                    )
+                    AND CAST(GETDATE() AS DATE) <= CAST(
+                        CASE cs.donViThoiGian
+                            WHEN 'NGAY' THEN DATEADD(DAY, cs.thoiHanBaoHanh, hd.ngayLap)
+                            WHEN 'NAM' THEN DATEADD(YEAR, cs.thoiHanBaoHanh, hd.ngayLap)
+                            ELSE DATEADD(MONTH, cs.thoiHanBaoHanh, hd.ngayLap)
+                        END AS DATE)
                   GROUP BY cthd.maHoaDon, cthd.maPhuTung
                   """
                 : """
@@ -440,10 +441,11 @@ public class PhieuYeuCauBaoHanhDAO {
         if (yeuCau == null) {
             throw new SQLException("Thông tin yêu cầu bảo hành không được để trống.");
         }
-        if (yeuCau.getMaHoaDon() == null || yeuCau.getMaHoaDon().isBlank()
-                || yeuCau.getMaPhuTung() == null || yeuCau.getMaPhuTung().isBlank()) {
+        if (maHoaDon(yeuCau) == null || maHoaDon(yeuCau).isBlank()
+                || maPhuTung(yeuCau) == null || maPhuTung(yeuCau).isBlank()) {
             throw new SQLException("Cần chọn hóa đơn và phụ tùng được yêu cầu bảo hành.");
         }
+
         if (yeuCau.getSoLuong() <= 0) {
             throw new SQLException("Số lượng yêu cầu phải lớn hơn 0.");
         }
@@ -455,13 +457,16 @@ public class PhieuYeuCauBaoHanhDAO {
         }
     }
 
+    private String maHoaDon(PhieuYeuCauBaoHanh yeuCau) {
+        return yeuCau.getHoaDon() == null ? null : yeuCau.getHoaDon().getMaHoaDon();
+    }
+
+    private String maPhuTung(PhieuYeuCauBaoHanh yeuCau) {
+        return yeuCau.getPhuTung() == null ? null : yeuCau.getPhuTung().getMaPhuTung();
+    }
+
     private Connection ketNoi() throws SQLException {
-        ConnectDB.getInstance().connect();
-        Connection con = ConnectDB.getConnection();
-        if (con == null) {
-            throw new SQLException("Không thể kết nối cơ sở dữ liệu.");
-        }
-        return con;
+        return DatabaseConnection.open();
     }
 
     @FunctionalInterface
@@ -470,22 +475,23 @@ public class PhieuYeuCauBaoHanhDAO {
     }
 
     private <R> R giaoDich(TacVu<R> tacVu) throws SQLException {
-        Connection con = ketNoi();
-        boolean autoCommit = con.getAutoCommit();
-        try {
-            con.setAutoCommit(false);
-            R ketQua = tacVu.chay(con);
-            con.commit();
-            return ketQua;
-        } catch (SQLException | RuntimeException exception) {
+        try (Connection con = ketNoi()) {
+            boolean autoCommit = con.getAutoCommit();
             try {
-                con.rollback();
-            } catch (SQLException rollbackException) {
-                exception.addSuppressed(rollbackException);
+                con.setAutoCommit(false);
+                R ketQua = tacVu.chay(con);
+                con.commit();
+                return ketQua;
+            } catch (SQLException | RuntimeException exception) {
+                try {
+                    con.rollback();
+                } catch (SQLException rollbackException) {
+                    exception.addSuppressed(rollbackException);
+                }
+                throw exception;
+            } finally {
+                con.setAutoCommit(autoCommit);
             }
-            throw exception;
-        } finally {
-            con.setAutoCommit(autoCommit);
         }
     }
 }

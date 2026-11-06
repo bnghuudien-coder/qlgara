@@ -39,7 +39,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
-public class FrmThongKeHoaDon extends JFrame {
+public class FrmThongKeDoanhThu extends JPanel {
     private static final Color BG = new Color(244, 249, 255);
     private static final Color BLUE = new Color(35, 128, 238);
     private static final Color DARK_BLUE = new Color(18, 58, 119);
@@ -58,23 +58,37 @@ public class FrmThongKeHoaDon extends JFrame {
     // Định dạng
     private static final DateTimeFormatter DMY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter HM = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter GIO_NGAY = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
     private static final NumberFormat MONEY = NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN"));
     // Chế độ thống kê
     private static final int CHE_DO_NGAY = 0;
     private static final int CHE_DO_THANG = 1;
     private static final int CHE_DO_NAM = 2;
+    // Phạm vi thống kê
+    private static final int PHAM_VI_TAT_CA = 0;
+    private static final int PHAM_VI_NHAN_VIEN = 1;
+    private static final int PHAM_VI_KHACH_HANG = 2;
+    // Tên thẻ trong khung bộ lọc
+    private static final String THE_NV = "NV";
+    private static final String THE_KH = "KH";
     // Tiêu đề cột bảng danh sách ở chế độ ngày
     private static final String[] COT_NGAY = { "Mã hóa đơn", "Nhân viên", "Khách hàng", "Biển số xe",
-            "Tổng tiền hóa đơn", "Trạng thái thanh toán" };
+            "Tổng tiền hóa đơn", "Còn nợ", "Trạng thái thanh toán" };
     // Câu lệnh SQL
     // Nhân viên có lập hóa đơn
-    private static final String SQL_NHAN_VIEN = "SELECT DISTINCT maNV " +
-            "FROM HoaDon " +
-            "WHERE maNV IS NOT NULL";
+    private static final String SQL_NHAN_VIEN = "SELECT DISTINCT nv.maNV, nv.hoTen " +
+            "FROM NhanVien nv " +
+            "INNER JOIN HoaDon hd ON nv.maNV = hd.maNV " +
+            "WHERE nv.maNV IS NOT NULL " +
+            "ORDER BY nv.maNV";
+    // Danh sách khách hàng
+    private static final String SQL_KHACH_HANG = "SELECT maKH, hoTen, soDT FROM KhachHang ORDER BY maKH";
     // Hóa đơn kèm khách hàng và tổng tiền đã thu thành công
     private static final String SQL_HOA_DON = "SELECT hd.maHoaDon, hd.ngayLap, hd.maNV, " +
             "       hd.soTien, " +
+            "       psc.maKH AS maKH, " +
             "       kh.hoTen AS tenKhachHang, " +
+            "       kh.soDT AS soDT, " +
             "       COALESCE(tt.tongDaThu, 0) AS tongDaThu " +
             "FROM HoaDon hd " +
             "LEFT JOIN PhieuSuaChua psc " +
@@ -89,6 +103,9 @@ public class FrmThongKeHoaDon extends JFrame {
             "    GROUP BY gd.maHoaDon " +
             ") tt ON hd.maHoaDon = tt.maHoaDon " +
             "ORDER BY hd.ngayLap DESC";
+    // Lịch sử giao dịch của một hóa đơn
+    private static final String SQL_GIAO_DICH = "SELECT thoiGianGD, phuongThucThanhToan, soTienThanhToan, trangThaiGD "
+            + "FROM GiaoDichThanhToan WHERE maHoaDon = ? ORDER BY thoiGianGD";
 
     // LỚP DỮ LIỆU
     private static class NhanVien {
@@ -100,24 +117,37 @@ public class FrmThongKeHoaDon extends JFrame {
         }
     }
 
+    private static class KhachHang {
+        final String ma, ten, sdt;
+
+        KhachHang(String ma, String ten, String sdt) {
+            this.ma = ma;
+            this.ten = ten;
+            this.sdt = sdt;
+        }
+    }
+
     private static class HoaDon {
-        final String ma, maNV, khachHang, bienSo;
+        final String ma, maNV, maKH, khachHang, sdt, bienSo;
         final LocalDate ngay;
         final LocalTime gio;
         final long tong, daThu;
 
-        HoaDon(String ma, LocalDate ngay, LocalTime gio, String maNV, String khachHang, String bienSo,
-                long tong, long daThu) {
+        HoaDon(String ma, LocalDate ngay, LocalTime gio, String maNV, String maKH, String khachHang,
+                String sdt, String bienSo, long tong, long daThu) {
             this.ma = ma;
             this.ngay = ngay;
             this.gio = gio;
             this.maNV = maNV;
+            this.maKH = maKH;
             this.khachHang = khachHang;
+            this.sdt = sdt;
             this.bienSo = bienSo;
             this.tong = tong;
             this.daThu = daThu;
         }
 
+        // Số còn nợ của hóa đơn
         long conPhaiThu() {
             return Math.max(0L, tong - daThu);
         }
@@ -133,8 +163,14 @@ public class FrmThongKeHoaDon extends JFrame {
         }
     }
 
+    private static class GiaoDich {
+        String thoiGian, phuongThuc, trangThai;
+        long soTien;
+    }
+
     // DỮ LIỆU VÀ TRẠNG THÁI
     private final Map<String, NhanVien> dsNhanVien = new LinkedHashMap<>();
+    private final Map<String, KhachHang> dsKhachHang = new LinkedHashMap<>();
     private final List<HoaDon> dsHoaDon = new ArrayList<>();
 
     // Dòng đang hiển thị trên bảng danh sách (để mở chi tiết / đi sâu xuống ngày,
@@ -152,31 +188,30 @@ public class FrmThongKeHoaDon extends JFrame {
     private JToggleButton[] tglTab;
     private JPanel pnlThoiGian;
     private JComboBox<Integer> cmbNgay, cmbThang, cmbNam;
-    private JLabel lblTongSoHoaDon, lblTongTienHoaDon;
+    private JLabel lblTongSoHoaDon, lblTongTienHoaDon, lblNoTrongKy, lblNoLuyKe;
 
     // Khung bộ lọc
     private JComboBox<String> cmbPhamVi;
-    private JTextField txtMaNV, txtTenNV;
-    private ActionButton btnTimKiem;
-    private JTable tblNhanVien;
-    private DefaultTableModel modelNhanVien;
-    private TableRowSorter<DefaultTableModel> sorterNhanVien;
+    private CardLayout cardBoLoc;
+    private JPanel pnlTheBoLoc;
+    private JTextField txtMaNV, txtTenNV, txtMaKH, txtTenKH, txtSoDienThoai;
+    private ActionButton btnTimKiemNV, btnTimKiemKH;
+    private JTable tblNhanVien, tblKhachHang;
+    private DefaultTableModel modelNhanVien, modelKhachHang;
+    private TableRowSorter<DefaultTableModel> sorterNhanVien, sorterKhachHang;
 
     // Khung danh sách và biểu đồ
     private JPanel pnlCacCot, pnlCotDanhSach, pnlCotBieuDo;
     private JTable tblThongKe;
     private DefaultTableModel modelThongKe;
     private JLabel lblTieuDeDanhSach, lblTieuDeBieuDo, lblGhiChu;
-    private BieuDoDoanhThu pnlBieuDo;
+    private BieuDoThongKe pnlBieuDo;
 
     // KHỞI TẠO
-    public FrmThongKeHoaDon() {
-        setTitle("Hệ thống quản lý gara ô tô");
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    public FrmThongKeDoanhThu() {
         setMinimumSize(new Dimension(1200, 720));
-        setSize(1500, 900);
-        setLocationRelativeTo(null);
-        getContentPane().setBackground(BG);
+        setPreferredSize(new Dimension(1500, 900));
+        setBackground(BG);
         setLayout(new BorderLayout());
 
         try {
@@ -192,6 +227,7 @@ public class FrmThongKeHoaDon extends JFrame {
         ganSuKien();
 
         napBangNhanVien();
+        napBangKhachHang();
         apDungPhamVi();
         dongBoSoNgay();
         sanSang = true;
@@ -201,6 +237,7 @@ public class FrmThongKeHoaDon extends JFrame {
     // TẢI DỮ LIỆU TỪ SQL SERVER
     private void taiDuLieu() throws SQLException {
         dsNhanVien.clear();
+        dsKhachHang.clear();
         dsHoaDon.clear();
 
         ConnectDB.getInstance().connect();
@@ -209,15 +246,30 @@ public class FrmThongKeHoaDon extends JFrame {
             throw new SQLException("Không thể kết nối SQL Server.");
         }
 
-        // 1. Nhân viên có lập hóa đơn (chưa có bảng nhân viên nên tên tạm lấy theo mã)
-        try (PreparedStatement ps = con.prepareStatement(SQL_NHAN_VIEN); ResultSet rs = ps.executeQuery()) {
+        // 1. Nhân viên có lập hóa đơn
+        try (PreparedStatement ps = con.prepareStatement(SQL_NHAN_VIEN);
+                ResultSet rs = ps.executeQuery()) {
+
             while (rs.next()) {
                 String ma = rs.getString("maNV");
-                dsNhanVien.put(ma, new NhanVien(ma, ma));
+                String ten = rs.getString("hoTen");
+
+                dsNhanVien.put(ma, new NhanVien(
+                        ma,
+                        ten == null ? "" : ten));
             }
         }
 
-        // 2. Hóa đơn, khách hàng và số tiền đã thu
+        // 2. Danh sách khách hàng
+        try (PreparedStatement ps = con.prepareStatement(SQL_KHACH_HANG); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                String ma = rs.getString("maKH");
+                String sdt = rs.getString("soDT");
+                dsKhachHang.put(ma, new KhachHang(ma, rs.getString("hoTen"), sdt == null ? "" : sdt));
+            }
+        }
+
+        // 3. Hóa đơn, khách hàng và số tiền đã thu
         try (PreparedStatement ps = con.prepareStatement(SQL_HOA_DON); ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
                 Timestamp ngayLap = rs.getTimestamp("ngayLap");
@@ -226,6 +278,7 @@ public class FrmThongKeHoaDon extends JFrame {
                 }
                 LocalDateTime thoiGian = ngayLap.toLocalDateTime();
                 String tenKH = rs.getString("tenKhachHang");
+                String sdt = rs.getString("soDT");
                 long tong = laySo(rs.getBigDecimal("soTien"));
                 long daThu = Math.max(0L, Math.min(laySo(rs.getBigDecimal("tongDaThu")), tong));
 
@@ -234,7 +287,9 @@ public class FrmThongKeHoaDon extends JFrame {
                         thoiGian.toLocalDate(),
                         thoiGian.toLocalTime(),
                         rs.getString("maNV"),
+                        rs.getString("maKH"),
                         tenKH == null ? "Chưa có thông tin khách hàng" : tenKH,
+                        sdt == null ? "" : sdt,
                         "Chưa xác định",
                         tong, daThu));
             }
@@ -256,7 +311,7 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlTieuDe.setBackground(BG);
         pnlTieuDe.setBorder(new EmptyBorder(10, 16, 0, 16));
 
-        JLabel lblTieuDe = new JLabel("THỐNG KÊ HÓA ĐƠN", SwingConstants.CENTER);
+        JLabel lblTieuDe = new JLabel("THỐNG KÊ DOANH THU", SwingConstants.CENTER);
         lblTieuDe.setFont(font(Font.BOLD, 24));
         lblTieuDe.setForeground(Color.BLACK);
         lblTieuDe.setBorder(new EmptyBorder(2, 0, 12, 0));
@@ -318,7 +373,8 @@ public class FrmThongKeHoaDon extends JFrame {
         return pnlChinh;
     }
 
-    // Hàng trên cùng: thời gian thống kê + tổng số hóa đơn + tổng tiền hóa đơn
+    // Hàng trên cùng: thời gian thống kê + tổng số hóa đơn + tổng tiền hóa đơn +
+    // công nợ
     private JPanel dungThanhThoiGian() {
         JPanel pnlThanh = new JPanel(new BorderLayout(16, 0));
         pnlThanh.setBackground(Color.WHITE);
@@ -356,17 +412,22 @@ public class FrmThongKeHoaDon extends JFrame {
 
         lblTongSoHoaDon = taoLblSoLieu(BLUE);
         lblTongTienHoaDon = taoLblSoLieu(GREEN);
-        JPanel pnlSoLieu = new JPanel(new GridLayout(1, 2, 10, 0));
+        lblNoTrongKy = taoLblSoLieu(DEBT_RED);
+        lblNoLuyKe = taoLblSoLieu(ORANGE);
+        lblTongSoHoaDon.setText("0");
+        JPanel pnlSoLieu = new JPanel(new GridLayout(2, 2, 10, 6));
         pnlSoLieu.setOpaque(false);
         pnlSoLieu.add(taoOThongKe("Tổng số hóa đơn", BLUE, lblTongSoHoaDon));
         pnlSoLieu.add(taoOThongKe("Tổng tiền hóa đơn", GREEN, lblTongTienHoaDon));
+        pnlSoLieu.add(taoOThongKe("Còn nợ trong kỳ", DEBT_RED, lblNoTrongKy));
+        pnlSoLieu.add(taoOThongKe("Công nợ lũy kế (đến cuối kỳ)", ORANGE, lblNoLuyKe));
 
         pnlThanh.add(pnlTrai, BorderLayout.WEST);
         pnlThanh.add(pnlSoLieu, BorderLayout.EAST);
         return pnlThanh;
     }
 
-    // Khung 1: bộ lọc
+    // Khung 1: bộ lọc (thẻ nhân viên hoặc thẻ khách hàng tùy phạm vi)
     private JPanel dungKhungBoLoc() {
         JPanel pnlBoLoc = taoPnlThe();
         JPanel pnlTren = new JPanel();
@@ -374,7 +435,7 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlTren.setLayout(new BoxLayout(pnlTren, BoxLayout.Y_AXIS));
 
         // Thống kê theo (ô chọn cùng hàng với tiêu đề)
-        cmbPhamVi = new JComboBox<>(new String[] { "Tất cả", "Nhân viên" });
+        cmbPhamVi = new JComboBox<>(new String[] { "Tất cả", "Nhân viên", "Khách hàng" });
         JPanel pnlPhamVi = new JPanel(new BorderLayout(10, 0));
         pnlPhamVi.setOpaque(false);
         pnlPhamVi.add(taoTieuMuc("Thống kê theo:"), BorderLayout.WEST);
@@ -383,19 +444,37 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlTren.add(Box.createVerticalStrut(4));
         themDuongKe(pnlTren);
 
-        // Tìm kiếm nhân viên
+        cardBoLoc = new CardLayout();
+        pnlTheBoLoc = new JPanel(cardBoLoc);
+        pnlTheBoLoc.setOpaque(false);
+        pnlTheBoLoc.add(dungTheNhanVien(), THE_NV);
+        pnlTheBoLoc.add(dungTheKhachHang(), THE_KH);
+
+        pnlBoLoc.add(pnlTren, BorderLayout.NORTH);
+        pnlBoLoc.add(pnlTheBoLoc, BorderLayout.CENTER);
+        return pnlBoLoc;
+    }
+
+    // Thẻ tìm kiếm + danh sách nhân viên
+    private JPanel dungTheNhanVien() {
+        JPanel pnlThe = new JPanel(new BorderLayout());
+        pnlThe.setOpaque(false);
+        JPanel pnlTren = new JPanel();
+        pnlTren.setOpaque(false);
+        pnlTren.setLayout(new BoxLayout(pnlTren, BoxLayout.Y_AXIS));
+
         pnlTren.add(taoTieuMuc("Tìm kiếm nhân viên"));
         pnlTren.add(Box.createVerticalStrut(6));
         txtMaNV = new JTextField();
         txtTenNV = new JTextField();
-        themOTimKiem(pnlTren, "Mã NV:", txtMaNV);
-        themOTimKiem(pnlTren, "Tên NV:", txtTenNV);
+        themOTimKiem(pnlTren, "Mã NV:", txtMaNV, 70);
+        themOTimKiem(pnlTren, "Tên NV:", txtTenNV, 70);
 
-        btnTimKiem = new ActionButton("Tìm kiếm", true);
-        btnTimKiem.addActionListener(e -> locNhanVien());
+        btnTimKiemNV = new ActionButton("Tìm kiếm", true);
+        btnTimKiemNV.addActionListener(e -> locNhanVien());
         JPanel pnlNut = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         pnlNut.setOpaque(false);
-        pnlNut.add(btnTimKiem);
+        pnlNut.add(btnTimKiemNV);
         pnlTren.add(Box.createVerticalStrut(2));
         pnlTren.add(codinh(pnlNut, 36));
         themDuongKe(pnlTren);
@@ -414,16 +493,61 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlDanhSach.add(taoTieuMuc("Danh sách nhân viên"), BorderLayout.NORTH);
         pnlDanhSach.add(taoScr(tblNhanVien), BorderLayout.CENTER);
 
-        pnlBoLoc.add(pnlTren, BorderLayout.NORTH);
-        pnlBoLoc.add(pnlDanhSach, BorderLayout.CENTER);
-        return pnlBoLoc;
+        pnlThe.add(pnlTren, BorderLayout.NORTH);
+        pnlThe.add(pnlDanhSach, BorderLayout.CENTER);
+        return pnlThe;
     }
 
-    private void themOTimKiem(JPanel pnlCha, String nhan, JTextField txt) {
+    // Thẻ tìm kiếm + danh sách khách hàng (từ phần công nợ)
+    private JPanel dungTheKhachHang() {
+        JPanel pnlThe = new JPanel(new BorderLayout());
+        pnlThe.setOpaque(false);
+        JPanel pnlTren = new JPanel();
+        pnlTren.setOpaque(false);
+        pnlTren.setLayout(new BoxLayout(pnlTren, BoxLayout.Y_AXIS));
+
+        pnlTren.add(taoTieuMuc("Tìm kiếm khách hàng"));
+        pnlTren.add(Box.createVerticalStrut(6));
+        txtMaKH = new JTextField();
+        txtTenKH = new JTextField();
+        txtSoDienThoai = new JTextField();
+        themOTimKiem(pnlTren, "Mã KH:", txtMaKH, 92);
+        themOTimKiem(pnlTren, "Tên KH:", txtTenKH, 92);
+        themOTimKiem(pnlTren, "Số điện thoại:", txtSoDienThoai, 92);
+
+        btnTimKiemKH = new ActionButton("Tìm kiếm", true);
+        btnTimKiemKH.addActionListener(e -> locKhachHang());
+        JPanel pnlNut = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        pnlNut.setOpaque(false);
+        pnlNut.add(btnTimKiemKH);
+        pnlTren.add(Box.createVerticalStrut(2));
+        pnlTren.add(codinh(pnlNut, 36));
+        themDuongKe(pnlTren);
+
+        // Danh sách khách hàng
+        modelKhachHang = taoModel("Mã KH", "Tên khách hàng", "Số điện thoại");
+        tblKhachHang = new JTable(modelKhachHang);
+        caiDatBang(tblKhachHang);
+        tblKhachHang.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        sorterKhachHang = new TableRowSorter<>(modelKhachHang);
+        tblKhachHang.setRowSorter(sorterKhachHang);
+        datDoRongCot(tblKhachHang, 65, 130, 100);
+
+        JPanel pnlDanhSach = new JPanel(new BorderLayout(0, 6));
+        pnlDanhSach.setOpaque(false);
+        pnlDanhSach.add(taoTieuMuc("Danh sách khách hàng"), BorderLayout.NORTH);
+        pnlDanhSach.add(taoScr(tblKhachHang), BorderLayout.CENTER);
+
+        pnlThe.add(pnlTren, BorderLayout.NORTH);
+        pnlThe.add(pnlDanhSach, BorderLayout.CENTER);
+        return pnlThe;
+    }
+
+    private void themOTimKiem(JPanel pnlCha, String nhan, JTextField txt, int rongNhan) {
         JLabel lblNhan = new JLabel(nhan);
         lblNhan.setFont(font(Font.PLAIN, 12));
         lblNhan.setForeground(DARK_BLUE);
-        lblNhan.setPreferredSize(new Dimension(70, 30));
+        lblNhan.setPreferredSize(new Dimension(rongNhan, 30));
 
         txt.setFont(font(Font.PLAIN, 12));
         txt.setPreferredSize(new Dimension(100, 30));
@@ -471,7 +595,7 @@ public class FrmThongKeHoaDon extends JFrame {
     }
 
     private JLabel taoLblSoLieu(Color mau) {
-        JLabel lbl = new JLabel("0", SwingConstants.RIGHT);
+        JLabel lbl = new JLabel("0 đ", SwingConstants.RIGHT);
         lbl.setFont(font(Font.BOLD, 15));
         lbl.setForeground(mau);
         return lbl;
@@ -515,8 +639,8 @@ public class FrmThongKeHoaDon extends JFrame {
     // Khung 3: biểu đồ
     private JPanel dungKhungBieuDo() {
         JPanel pnlKhung = taoPnlThe();
-        lblTieuDeBieuDo = taoTieuDe("BIỂU ĐỒ THỐNG KÊ DOANH THU");
-        pnlBieuDo = new BieuDoDoanhThu();
+        lblTieuDeBieuDo = taoTieuDe("BIỂU ĐỒ DOANH THU VÀ CÔNG NỢ");
+        pnlBieuDo = new BieuDoThongKe();
         pnlKhung.add(lblTieuDeBieuDo, BorderLayout.NORTH);
         pnlKhung.add(pnlBieuDo, BorderLayout.CENTER);
         return pnlKhung;
@@ -539,7 +663,7 @@ public class FrmThongKeHoaDon extends JFrame {
         cmbThang.addActionListener(doiThangNam);
         cmbNam.addActionListener(doiThangNam);
 
-        // Đổi phạm vi thống kê (Tất cả / Nhân viên)
+        // Đổi phạm vi thống kê (Tất cả / Nhân viên / Khách hàng)
         cmbPhamVi.addActionListener(e -> {
             if (dangDieuChinh) {
                 return;
@@ -548,8 +672,13 @@ public class FrmThongKeHoaDon extends JFrame {
             lamMoiThongKe();
         });
 
-        // Chọn một nhân viên trong danh sách
+        // Chọn một nhân viên / khách hàng trong danh sách
         tblNhanVien.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                lamMoiThongKe();
+            }
+        });
+        tblKhachHang.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 lamMoiThongKe();
             }
@@ -558,6 +687,9 @@ public class FrmThongKeHoaDon extends JFrame {
         // Gõ vào ô tìm kiếm -> lọc ngay
         khiThayDoi(txtMaNV, this::locNhanVien);
         khiThayDoi(txtTenNV, this::locNhanVien);
+        khiThayDoi(txtMaKH, this::locKhachHang);
+        khiThayDoi(txtTenKH, this::locKhachHang);
+        khiThayDoi(txtSoDienThoai, this::locKhachHang);
 
         // Bấm đúp một dòng danh sách -> xem chi tiết
         tblThongKe.addMouseListener(new MouseAdapter() {
@@ -596,7 +728,7 @@ public class FrmThongKeHoaDon extends JFrame {
         lamMoiThongKe();
     }
 
-    // BỘ LỌC: THỜI GIAN, PHẠM VI, NHÂN VIÊN
+    // BỘ LỌC: THỜI GIAN, PHẠM VI, NHÂN VIÊN, KHÁCH HÀNG
     private static int layGiaTri(JComboBox<Integer> cmb, int macDinh) {
         Object giaTri = cmb.getSelectedItem();
         return giaTri == null ? macDinh : (Integer) giaTri;
@@ -670,12 +802,23 @@ public class FrmThongKeHoaDon extends JFrame {
         }
     }
 
-    // "Tất cả": khóa tìm kiếm và danh sách nhân viên. "Nhân viên": mở khóa
+    private void napBangKhachHang() {
+        modelKhachHang.setRowCount(0);
+        for (KhachHang kh : dsKhachHang.values()) {
+            modelKhachHang.addRow(new Object[] { kh.ma, kh.ten, kh.sdt });
+        }
+    }
+
+    // "Tất cả": khóa cả hai danh sách. "Nhân viên"/"Khách hàng": mở khóa thẻ tương
+    // ứng
     private void apDungPhamVi() {
-        boolean theoNV = cmbPhamVi.getSelectedIndex() == 1;
+        int phamVi = cmbPhamVi.getSelectedIndex();
+        boolean theoNV = phamVi == PHAM_VI_NHAN_VIEN;
+        boolean theoKH = phamVi == PHAM_VI_KHACH_HANG;
+
         txtMaNV.setEnabled(theoNV);
         txtTenNV.setEnabled(theoNV);
-        btnTimKiem.setEnabled(theoNV);
+        btnTimKiemNV.setEnabled(theoNV);
         tblNhanVien.setEnabled(theoNV);
         if (!theoNV) {
             txtMaNV.setText("");
@@ -685,7 +828,34 @@ public class FrmThongKeHoaDon extends JFrame {
         } else if (tblNhanVien.getSelectedRow() < 0 && tblNhanVien.getRowCount() > 0) {
             tblNhanVien.setRowSelectionInterval(0, 0);
         }
+
+        txtMaKH.setEnabled(theoKH);
+        txtTenKH.setEnabled(theoKH);
+        txtSoDienThoai.setEnabled(theoKH);
+        btnTimKiemKH.setEnabled(theoKH);
+        tblKhachHang.setEnabled(theoKH);
+        if (!theoKH) {
+            txtMaKH.setText("");
+            txtTenKH.setText("");
+            txtSoDienThoai.setText("");
+            sorterKhachHang.setRowFilter(null);
+            tblKhachHang.clearSelection();
+        } else {
+            chonDongDauKhachHang();
+        }
+
+        cardBoLoc.show(pnlTheBoLoc, theoKH ? THE_KH : THE_NV);
         tblNhanVien.repaint();
+        tblKhachHang.repaint();
+    }
+
+    // Đang thống kê theo khách hàng mà chưa có dòng nào được chọn thì chọn dòng đầu
+    private void chonDongDauKhachHang() {
+        if (cmbPhamVi.getSelectedIndex() == PHAM_VI_KHACH_HANG
+                && tblKhachHang.getSelectedRow() < 0
+                && tblKhachHang.getRowCount() > 0) {
+            tblKhachHang.setRowSelectionInterval(0, 0);
+        }
     }
 
     // Bỏ dấu tiếng Việt, về chữ thường để tìm kiếm không phân biệt dấu
@@ -711,6 +881,26 @@ public class FrmThongKeHoaDon extends JFrame {
         });
     }
 
+    private void locKhachHang() {
+        final String ma = chuanHoa(txtMaKH.getText());
+        final String ten = chuanHoa(txtTenKH.getText());
+        final String sdt = chuanHoa(txtSoDienThoai.getText());
+
+        if (ma.isEmpty() && ten.isEmpty() && sdt.isEmpty()) {
+            sorterKhachHang.setRowFilter(null);
+        } else {
+            sorterKhachHang.setRowFilter(new RowFilter<DefaultTableModel, Integer>() {
+                @Override
+                public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
+                    return chuanHoa(e.getStringValue(0)).contains(ma)
+                            && chuanHoa(e.getStringValue(1)).contains(ten)
+                            && chuanHoa(e.getStringValue(2)).contains(sdt);
+                }
+            });
+        }
+        chonDongDauKhachHang();
+    }
+
     private String maNhanVienDangChon() {
         int dong = tblNhanVien.getSelectedRow();
         if (dong < 0) {
@@ -719,8 +909,16 @@ public class FrmThongKeHoaDon extends JFrame {
         return modelNhanVien.getValueAt(tblNhanVien.convertRowIndexToModel(dong), 0).toString();
     }
 
+    private String maKhachHangDangChon() {
+        int dong = tblKhachHang.getSelectedRow();
+        if (dong < 0) {
+            return null;
+        }
+        return modelKhachHang.getValueAt(tblKhachHang.convertRowIndexToModel(dong), 0).toString();
+    }
+
     // THỐNG KÊ
-    // Tính lại toàn bộ: tổng, danh sách, biểu đồ
+    // Tính lại toàn bộ: tổng, công nợ, danh sách, biểu đồ
     private void lamMoiThongKe() {
         if (!sanSang) {
             return;
@@ -742,32 +940,49 @@ public class FrmThongKeHoaDon extends JFrame {
             ketThuc = ym.atEndOfMonth();
             String ky = String.format("%02d/%d", thang, nam);
             tieuDeDS = "THỐNG KÊ THÁNG " + ky;
-            tieuDeBD = "BIỂU ĐỒ DOANH THU ĐÃ THU THEO THÁNG " + ky;
-        } else if (cheDo == CHE_DO_NAM) {
-            batDau = LocalDate.of(nam, 1, 1);
-            ketThuc = LocalDate.of(nam, 12, 31);
-            tieuDeDS = "THỐNG KÊ THEO NĂM " + nam;
-            tieuDeBD = "BIỂU ĐỒ DOANH THU ĐÃ THU THEO NĂM " + nam;
+            tieuDeBD = "BIỂU ĐỒ DOANH THU VÀ CÔNG NỢ THEO THÁNG " + ky;
         } else {
             batDau = LocalDate.of(nam, 1, 1);
             ketThuc = LocalDate.of(nam, 12, 31);
             tieuDeDS = "THỐNG KÊ THEO NĂM " + nam;
-            tieuDeBD = "BIỂU ĐỒ DOANH THU ĐÃ THU THEO NĂM " + nam;
+            tieuDeBD = "BIỂU ĐỒ DOANH THU VÀ CÔNG NỢ THEO NĂM " + nam;
         }
         lblTieuDeDanhSach.setText(tieuDeDS);
         lblTieuDeBieuDo.setText(tieuDeBD);
 
-        // 2. Phạm vi nhân viên
-        boolean theoNV = cmbPhamVi.getSelectedIndex() == 1;
-        String maNV = theoNV ? maNhanVienDangChon() : null;
+        // 2. Phạm vi nhân viên / khách hàng
+        int phamVi = cmbPhamVi.getSelectedIndex();
+        String maNV = phamVi == PHAM_VI_NHAN_VIEN ? maNhanVienDangChon() : null;
+        String maKH = phamVi == PHAM_VI_KHACH_HANG ? maKhachHangDangChon() : null;
         List<HoaDon> dsLoc = new ArrayList<>();
         for (HoaDon hd : dsHoaDon) {
-            if (!theoNV || (maNV != null && maNV.equals(hd.maNV))) {
+            boolean hopLe;
+            if (phamVi == PHAM_VI_NHAN_VIEN) {
+                hopLe = maNV != null && maNV.equals(hd.maNV);
+            } else if (phamVi == PHAM_VI_KHACH_HANG) {
+                hopLe = maKH != null && maKH.equals(hd.maKH);
+            } else {
+                hopLe = true;
+            }
+            if (hopLe) {
                 dsLoc.add(hd);
             }
         }
 
-        // 3. Danh sách
+        // 3. Công nợ: còn nợ của hóa đơn lập trong kỳ, và lũy kế đến cuối kỳ
+        long noTrongKy = 0, noLuyKe = 0;
+        for (HoaDon hd : dsLoc) {
+            if (!hd.ngay.isBefore(batDau) && !hd.ngay.isAfter(ketThuc)) {
+                noTrongKy += hd.conPhaiThu();
+            }
+            if (!hd.ngay.isAfter(ketThuc)) {
+                noLuyKe += hd.conPhaiThu();
+            }
+        }
+        lblNoTrongKy.setText(formatTien(noTrongKy));
+        lblNoLuyKe.setText(formatTien(noLuyKe));
+
+        // 4. Danh sách
         dongHoaDon.clear();
         dongKhoa.clear();
         modelThongKe.setRowCount(0);
@@ -782,9 +997,9 @@ public class FrmThongKeHoaDon extends JFrame {
 
         lblTongSoHoaDon.setText(String.valueOf(ketQua[0]));
         lblTongTienHoaDon.setText(formatTien(ketQua[1]));
-        capNhatGhiChu(theoNV, maNV);
+        capNhatGhiChu(phamVi, maNV, maKH);
 
-        // 4. Bố cục các cột và biểu đồ
+        // 5. Bố cục các cột và biểu đồ
         capNhatBoCot();
         if (cheDo != CHE_DO_NGAY) {
             capNhatBieuDo(dsLoc, ym, nam);
@@ -795,13 +1010,8 @@ public class FrmThongKeHoaDon extends JFrame {
         if (cheDo == CHE_DO_NGAY) {
             return COT_NGAY;
         }
-        if (cheDo == CHE_DO_THANG) {
-            return new String[] { "Ngày", "Số hóa đơn", "Tổng tiền hóa đơn", "Tổng tiền đã thu" };
-        }
-        if (cheDo == CHE_DO_NAM) {
-            return new String[] { "Tháng", "Số hóa đơn", "Tổng tiền hóa đơn", "Tổng tiền đã thu" };
-        }
-        return new String[] { "Tháng", "Số hóa đơn", "Tổng tiền hóa đơn", "Tổng tiền đã thu" };
+        String cotDau = cheDo == CHE_DO_THANG ? "Ngày" : "Tháng";
+        return new String[] { cotDau, "Số hóa đơn", "Tổng tiền hóa đơn", "Tổng tiền đã thu", "Tổng tiền nợ" };
     }
 
     // Thu ngắn cột Ngày/Tháng và Số hóa đơn
@@ -831,6 +1041,7 @@ public class FrmThongKeHoaDon extends JFrame {
                     hd.khachHang,
                     hd.bienSo,
                     formatTien(hd.tong),
+                    formatTien(hd.conPhaiThu()),
                     hd.trangThai()
             });
             dongHoaDon.add(hd);
@@ -842,17 +1053,18 @@ public class FrmThongKeHoaDon extends JFrame {
     // Tab tháng / năm: gom theo ngày hoặc tháng. Trả về {số hóa đơn, tổng tiền hóa
     // đơn}
     private long[] napBangNhom(List<HoaDon> dsLoc, LocalDate batDau, LocalDate ketThuc) {
-        // Mỗi nhóm: {số hóa đơn, tổng tiền, tiền đã thu}
+        // Mỗi nhóm: {số hóa đơn, tổng tiền, tiền đã thu, còn nợ}
         TreeMap<LocalDate, long[]> dsNhom = new TreeMap<>();
         for (HoaDon hd : dsLoc) {
             if (hd.ngay.isBefore(batDau) || hd.ngay.isAfter(ketThuc)) {
                 continue;
             }
             LocalDate khoa = cheDo == CHE_DO_THANG ? hd.ngay : hd.ngay.withDayOfMonth(1);
-            long[] nhom = dsNhom.computeIfAbsent(khoa, k -> new long[3]);
+            long[] nhom = dsNhom.computeIfAbsent(khoa, k -> new long[4]);
             nhom[0]++;
             nhom[1] += hd.tong;
             nhom[2] += hd.daThu;
+            nhom[3] += hd.conPhaiThu();
         }
 
         long soHD = 0, tongTien = 0;
@@ -861,7 +1073,8 @@ public class FrmThongKeHoaDon extends JFrame {
             String nhan = String.valueOf(cheDo == CHE_DO_THANG
                     ? muc.getKey().getDayOfMonth()
                     : muc.getKey().getMonthValue());
-            modelThongKe.addRow(new Object[] { nhan, nhom[0], formatTien(nhom[1]), formatTien(nhom[2]) });
+            modelThongKe.addRow(new Object[] { nhan, nhom[0], formatTien(nhom[1]), formatTien(nhom[2]),
+                    formatTien(nhom[3]) });
             dongKhoa.add(muc.getKey());
             soHD += nhom[0];
             tongTien += nhom[1];
@@ -869,9 +1082,11 @@ public class FrmThongKeHoaDon extends JFrame {
         return new long[] { soHD, tongTien };
     }
 
-    private void capNhatGhiChu(boolean theoNV, String maNV) {
-        if (theoNV && maNV == null) {
+    private void capNhatGhiChu(int phamVi, String maNV, String maKH) {
+        if (phamVi == PHAM_VI_NHAN_VIEN && maNV == null) {
             lblGhiChu.setText("Hãy chọn một nhân viên trong danh sách.");
+        } else if (phamVi == PHAM_VI_KHACH_HANG && maKH == null) {
+            lblGhiChu.setText("Hãy chọn một khách hàng trong danh sách.");
         } else if (modelThongKe.getRowCount() == 0) {
             lblGhiChu.setText("Không có hóa đơn trong kỳ này.");
         } else if (cheDo == CHE_DO_NGAY) {
@@ -895,32 +1110,23 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlCacCot.repaint();
     }
 
-    // Biểu đồ: doanh thu đã thu theo ngày trong tháng hoặc theo tháng trong năm
+    // Biểu đồ: doanh thu đã thu, công nợ trong kỳ, công nợ lũy kế theo ngày trong
+    // tháng hoặc theo tháng trong năm
     private void capNhatBieuDo(List<HoaDon> dsLoc, YearMonth ym, int nam) {
-        int soCot;
-        String nhanBieuDo;
-        if (cheDo == CHE_DO_THANG) {
-            soCot = ym.lengthOfMonth();
-            nhanBieuDo = "Ngày";
-        } else if (cheDo == CHE_DO_NAM) {
-            soCot = 12;
-            nhanBieuDo = "Tháng";
-        } else {
-            soCot = 12;
-            nhanBieuDo = "Tháng";
-        }
+        boolean theoThang = cheDo == CHE_DO_THANG;
+        int soCot = theoThang ? ym.lengthOfMonth() : 12;
+        String nhanBieuDo = theoThang ? "Ngày" : "Tháng";
+
         String[] dsNhan = new String[soCot];
         long[] dsDoanhThu = new long[soCot];
+        long[] dsNoKy = new long[soCot];
+        long[] dsNoLuyKe = new long[soCot];
         long[] dsSoHD = new long[soCot];
 
         for (int i = 0; i < soCot; i++) {
             LocalDate tu, den;
-            if (cheDo == CHE_DO_THANG) {
+            if (theoThang) {
                 tu = den = ym.atDay(i + 1);
-            } else if (cheDo == CHE_DO_NAM) {
-                YearMonth thang = YearMonth.of(nam, i + 1);
-                tu = thang.atDay(1);
-                den = thang.atEndOfMonth();
             } else {
                 YearMonth thang = YearMonth.of(nam, i + 1);
                 tu = thang.atDay(1);
@@ -930,11 +1136,15 @@ public class FrmThongKeHoaDon extends JFrame {
             for (HoaDon hd : dsLoc) {
                 if (!hd.ngay.isBefore(tu) && !hd.ngay.isAfter(den)) {
                     dsDoanhThu[i] += hd.daThu;
+                    dsNoKy[i] += hd.conPhaiThu();
                     dsSoHD[i]++;
+                }
+                if (!hd.ngay.isAfter(den)) {
+                    dsNoLuyKe[i] += hd.conPhaiThu();
                 }
             }
         }
-        pnlBieuDo.napDuLieu(dsNhan, dsDoanhThu, dsSoHD, nhanBieuDo);
+        pnlBieuDo.napDuLieu(dsNhan, new long[][] { dsDoanhThu, dsNoKy, dsNoLuyKe }, dsSoHD, nhanBieuDo);
     }
 
     // XEM CHI TIẾT
@@ -954,6 +1164,34 @@ public class FrmThongKeHoaDon extends JFrame {
             datNgay(dongKhoa.get(dong));
             chonTab(cheDo == CHE_DO_THANG ? CHE_DO_NGAY : CHE_DO_THANG);
         }
+    }
+
+    // Lấy lịch sử giao dịch thanh toán của một hóa đơn
+    private List<GiaoDich> taiGiaoDich(String maHoaDon) {
+        List<GiaoDich> dsGiaoDich = new ArrayList<>();
+        try {
+            ConnectDB.getInstance().connect();
+            Connection con = ConnectDB.getConnection();
+            try (PreparedStatement ps = con.prepareStatement(SQL_GIAO_DICH)) {
+                ps.setString(1, maHoaDon);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        GiaoDich gd = new GiaoDich();
+                        Timestamp thoiGian = rs.getTimestamp("thoiGianGD");
+                        gd.thoiGian = thoiGian == null ? "-" : thoiGian.toLocalDateTime().format(GIO_NGAY);
+                        gd.phuongThuc = rs.getString("phuongThucThanhToan");
+                        gd.soTien = laySo(rs.getBigDecimal("soTienThanhToan"));
+                        gd.trangThai = rs.getString("trangThaiGD");
+                        dsGiaoDich.add(gd);
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Không thể tải lịch sử thanh toán:\n" + ex.getMessage(),
+                    "Lỗi CSDL", JOptionPane.ERROR_MESSAGE);
+        }
+        return dsGiaoDich;
     }
 
     private JPanel taoOThongTin(String nhan, String giaTri) {
@@ -989,10 +1227,11 @@ public class FrmThongKeHoaDon extends JFrame {
         return pnlO;
     }
 
-    // Cửa sổ chi tiết hóa đơn: 1) Thông tin hóa đơn, 2) Thông tin thanh toán, 3)
-    // Nút Đóng
+    // Cửa sổ chi tiết hóa đơn: 1) Thông tin hóa đơn, 2) Thông tin thanh toán và
+    // công nợ, 3) Lịch sử thanh toán, 4) Nút Đóng
     private void hienChiTietHoaDon(HoaDon hd) {
-        JDialog winChiTiet = new JDialog(this, "Chi tiết hóa đơn - " + hd.ma, true);
+        JDialog winChiTiet = new JDialog(SwingUtilities.getWindowAncestor(this), "Chi tiết hóa đơn - " + hd.ma,
+                Dialog.ModalityType.APPLICATION_MODAL);
 
         // Phần 1: thông tin hóa đơn
         JPanel pnlThongTin = taoPnlThe();
@@ -1003,6 +1242,7 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlLuoi.add(taoOThongTin("Ngày lập", hd.ngay.format(DMY) + "  " + hd.gio.format(HM)));
         pnlLuoi.add(taoOThongTin("Nhân viên lập hóa đơn", tenNhanVien(hd.maNV)));
         pnlLuoi.add(taoOThongTin("Khách hàng", hd.khachHang));
+        pnlLuoi.add(taoOThongTin("Số điện thoại", hd.sdt));
         pnlLuoi.add(taoOThongTin("Biển số xe", hd.bienSo));
         pnlThongTin.add(pnlLuoi, BorderLayout.CENTER);
 
@@ -1036,7 +1276,36 @@ public class FrmThongKeHoaDon extends JFrame {
         pnlNoiDungTT.add(pnlTrangThai, BorderLayout.SOUTH);
         pnlThanhToan.add(pnlNoiDungTT, BorderLayout.CENTER);
 
-        // Phần 3: chỉ có nút Đóng
+        // Phần 3: lịch sử thanh toán
+        List<GiaoDich> dsGiaoDich = taiGiaoDich(hd.ma);
+        JPanel pnlLichSu = taoPnlThe();
+        pnlLichSu.add(taoTieuDe("3. LỊCH SỬ THANH TOÁN"), BorderLayout.NORTH);
+        if (dsGiaoDich.isEmpty()) {
+            JLabel lblTrong = new JLabel("Hóa đơn này chưa có giao dịch thanh toán nào.", SwingConstants.CENTER);
+            lblTrong.setFont(font(Font.ITALIC, 12));
+            lblTrong.setForeground(MUTED);
+            lblTrong.setPreferredSize(new Dimension(100, 60));
+            pnlLichSu.add(lblTrong, BorderLayout.CENTER);
+        } else {
+            DefaultTableModel modelGiaoDich = taoModel(
+                    "STT", "Thời gian thanh toán", "Phương thức", "Số tiền thanh toán", "Trạng thái");
+            int stt = 1;
+            for (GiaoDich gd : dsGiaoDich) {
+                modelGiaoDich.addRow(new Object[] {
+                        String.valueOf(stt++), gd.thoiGian,
+                        gd.phuongThuc == null ? "-" : gd.phuongThuc, formatTien(gd.soTien),
+                        gd.trangThai == null ? "-" : gd.trangThai });
+            }
+            JTable tblGiaoDich = new JTable(modelGiaoDich);
+            caiDatBang(tblGiaoDich);
+            tblGiaoDich.setRowHeight(30);
+            datDoRongCot(tblGiaoDich, 40, 150, 130, 130, 100);
+            JScrollPane scrGiaoDich = taoScr(tblGiaoDich);
+            scrGiaoDich.setPreferredSize(new Dimension(100, 150));
+            pnlLichSu.add(scrGiaoDich, BorderLayout.CENTER);
+        }
+
+        // Phần 4: chỉ có nút Đóng
         ActionButton btnDong = new ActionButton("Đóng", false);
         btnDong.addActionListener(e -> winChiTiet.dispose());
         JPanel pnlNut = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
@@ -1047,7 +1316,7 @@ public class FrmThongKeHoaDon extends JFrame {
         JPanel pnlNoiDung = new JPanel();
         pnlNoiDung.setOpaque(false);
         pnlNoiDung.setLayout(new BoxLayout(pnlNoiDung, BoxLayout.Y_AXIS));
-        for (JPanel pnl : new JPanel[] { pnlThongTin, pnlThanhToan, pnlNut }) {
+        for (JPanel pnl : new JPanel[] { pnlThongTin, pnlThanhToan, pnlLichSu, pnlNut }) {
             pnl.setAlignmentX(Component.LEFT_ALIGNMENT);
             if (pnlNoiDung.getComponentCount() > 0) {
                 pnlNoiDung.add(Box.createVerticalStrut(10));
@@ -1063,7 +1332,7 @@ public class FrmThongKeHoaDon extends JFrame {
         winChiTiet.setContentPane(pnlGoc);
         winChiTiet.getRootPane().setDefaultButton(btnDong);
         winChiTiet.pack();
-        winChiTiet.setMinimumSize(new Dimension(620, winChiTiet.getHeight()));
+        winChiTiet.setMinimumSize(new Dimension(640, winChiTiet.getHeight()));
         winChiTiet.setLocationRelativeTo(this);
         winChiTiet.setVisible(true);
     }
@@ -1413,14 +1682,21 @@ public class FrmThongKeHoaDon extends JFrame {
         return "Tổng tiền hóa đơn".equals(ten) || "Tổng tiền".equals(ten);
     }
 
+    private static boolean laCotNo(String ten) {
+        return "Còn nợ".equals(ten) || "Tổng tiền nợ".equals(ten);
+    }
+
     // LỚP GIAO DIỆN TỰ VẼ
-    // Hiển thị ô bảng: số tiền căn phải (đậm), số lượng căn giữa, dòng xen kẽ màu
+    // Hiển thị ô bảng: số tiền căn phải (đậm), nợ tô đỏ, số lượng căn giữa, dòng
+    // xen kẽ màu
     private static class CellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(JTable tbl, Object giaTri, boolean dangChon,
                 boolean coFocus, int dong, int cot) {
             super.getTableCellRendererComponent(tbl, giaTri, dangChon, false, dong, cot);
             String chu = giaTri == null ? "" : giaTri.toString();
+            String tenCot = tbl.getColumnName(cot);
+            boolean cotNo = laCotNo(tenCot);
             setBorder(new EmptyBorder(0, 8, 0, 8));
 
             if (giaTri instanceof Number) {
@@ -1430,13 +1706,15 @@ public class FrmThongKeHoaDon extends JFrame {
             } else {
                 setHorizontalAlignment(SwingConstants.LEFT);
             }
-            setFont(font(laCotTien(tbl.getColumnName(cot)) ? Font.BOLD : Font.PLAIN, 12));
+            setFont(font(laCotTien(tenCot) || cotNo ? Font.BOLD : Font.PLAIN, 12));
 
             Color mauChu;
             if (!tbl.isEnabled()) {
                 mauChu = DISABLED;
             } else if (dangChon) {
                 mauChu = DARK_BLUE;
+            } else if (cotNo && !chu.equals("0 đ")) {
+                mauChu = DEBT_RED;
             } else {
                 mauChu = TEXT;
             }
@@ -1522,22 +1800,26 @@ public class FrmThongKeHoaDon extends JFrame {
         }
     }
 
-    // Biểu đồ cột doanh thu đã thu
-    private static class BieuDoDoanhThu extends JPanel {
-        private static final int LE_TRAI = 64, LE_PHAI = 14, LE_TREN = 36, LE_DUOI = 50;
+    // Biểu đồ cột nhóm: doanh thu đã thu (xanh dương), công nợ trong kỳ (đỏ), công
+    // nợ lũy kế (cam)
+    private static class BieuDoThongKe extends JPanel {
+        private static final int LE_TRAI = 64, LE_PHAI = 14, LE_TREN = 44, LE_DUOI = 50;
+        private static final String[] TEN_CHUOI = { "Doanh thu đã thu", "Nợ trong kỳ", "Công nợ lũy kế" };
+        private static final Color[] MAU_CHUOI = { BLUE, DEBT_RED, ORANGE };
 
         private String[] dsNhan = new String[0];
-        private long[] dsDoanhThu = new long[0], dsSoHD = new long[0];
+        private long[][] dsGiaTri = new long[TEN_CHUOI.length][0];
+        private long[] dsSoHD = new long[0];
         private String tenTrucX = "";
 
-        BieuDoDoanhThu() {
+        BieuDoThongKe() {
             setBackground(Color.WHITE);
             setToolTipText("");
         }
 
-        void napDuLieu(String[] dsNhan, long[] dsDoanhThu, long[] dsSoHD, String tenTrucX) {
+        void napDuLieu(String[] dsNhan, long[][] dsGiaTri, long[] dsSoHD, String tenTrucX) {
             this.dsNhan = dsNhan;
-            this.dsDoanhThu = dsDoanhThu;
+            this.dsGiaTri = dsGiaTri;
             this.dsSoHD = dsSoHD;
             this.tenTrucX = tenTrucX;
             repaint();
@@ -1546,8 +1828,10 @@ public class FrmThongKeHoaDon extends JFrame {
         // Bước chia trục Y "đẹp" (1, 2, 2.5, 5, 10 x lũy thừa 10)
         private long buocChia() {
             long lonNhat = 0;
-            for (long v : dsDoanhThu) {
-                lonNhat = Math.max(lonNhat, v);
+            for (long[] chuoi : dsGiaTri) {
+                for (long v : chuoi) {
+                    lonNhat = Math.max(lonNhat, v);
+                }
             }
             double tho = lonNhat <= 0 ? 1_000_000 : lonNhat / 5.0;
             double luyThua = Math.pow(10, Math.floor(Math.log10(tho)));
@@ -1585,7 +1869,9 @@ public class FrmThongKeHoaDon extends JFrame {
                 return null;
             }
             return "<html><b>" + tenTrucX + " " + dsNhan[i] + "</b><br>Số hóa đơn: " + dsSoHD[i]
-                    + "<br>Doanh thu: " + formatTien(dsDoanhThu[i]) + "</html>";
+                    + "<br>Doanh thu đã thu: " + formatTien(dsGiaTri[0][i])
+                    + "<br>Nợ trong kỳ: " + formatTien(dsGiaTri[1][i])
+                    + "<br>Công nợ lũy kế: " + formatTien(dsGiaTri[2][i]) + "</html>";
         }
 
         @Override
@@ -1606,14 +1892,19 @@ public class FrmThongKeHoaDon extends JFrame {
 
             // Chú thích: góc trên bên trái của biểu đồ
             g2.setFont(font(Font.PLAIN, 12));
-            g2.setColor(BLUE);
-            g2.fillRoundRect(LE_TRAI, 8, 12, 12, 3, 3);
-            g2.setColor(DARK_BLUE);
-            g2.drawString("Doanh thu đã thu", LE_TRAI + 18, 19);
+            FontMetrics fm = g2.getFontMetrics();
+            int xChuThich = LE_TRAI, yChuThich = 18;
+            for (int s = 0; s < TEN_CHUOI.length; s++) {
+                g2.setColor(MAU_CHUOI[s]);
+                g2.fillRoundRect(xChuThich, yChuThich - 10, 12, 12, 3, 3);
+                g2.setColor(DARK_BLUE);
+                g2.drawString(TEN_CHUOI[s], xChuThich + 18, yChuThich);
+                xChuThich += 18 + fm.stringWidth(TEN_CHUOI[s]) + 16;
+            }
 
             // Lưới ngang + nhãn trục Y
             g2.setFont(font(Font.PLAIN, 11));
-            FontMetrics fm = g2.getFontMetrics();
+            fm = g2.getFontMetrics();
             for (int i = 0; i <= 5; i++) {
                 int yLuoi = LE_TREN + cao - (cao * i / 5);
                 g2.setColor(new Color(221, 234, 250));
@@ -1625,19 +1916,25 @@ public class FrmThongKeHoaDon extends JFrame {
 
             // Các cột
             int soCot = dsNhan.length;
+            int soChuoi = TEN_CHUOI.length;
             boolean khongCoDuLieu = true;
             if (soCot > 0) {
                 double oCot = (double) rong / soCot;
-                int beRongCot = (int) Math.max(3, Math.min(30, oCot * 0.6));
+                int beRongCot = (int) Math.max(2, Math.min(14, oCot / 4));
+                int rongNhom = soChuoi * beRongCot + (soChuoi - 1);
                 int buocNhan = oCot >= 26 ? 1 : oCot >= 14 ? 2 : 5;
                 for (int i = 0; i < soCot; i++) {
-                    if (dsDoanhThu[i] > 0) {
-                        khongCoDuLieu = false;
-                    }
                     double tam = LE_TRAI + oCot * i + oCot / 2;
-                    int caoCot = (int) (cao * (double) dsDoanhThu[i] / yToiDa);
-                    g2.setColor(BLUE);
-                    g2.fillRoundRect((int) tam - beRongCot / 2, LE_TREN + cao - caoCot, beRongCot, caoCot, 3, 3);
+                    int xDau = (int) tam - rongNhom / 2;
+                    for (int s = 0; s < soChuoi; s++) {
+                        long giaTri = dsGiaTri[s][i];
+                        if (giaTri > 0) {
+                            khongCoDuLieu = false;
+                        }
+                        int caoCot = (int) (cao * (double) giaTri / yToiDa);
+                        g2.setColor(MAU_CHUOI[s]);
+                        g2.fillRect(xDau + s * (beRongCot + 1), LE_TREN + cao - caoCot, beRongCot, caoCot);
+                    }
                     if (i % buocNhan == 0) {
                         g2.setColor(DARK_BLUE);
                         g2.drawString(dsNhan[i], (int) tam - fm.stringWidth(dsNhan[i]) / 2, LE_TREN + cao + 16);
@@ -1647,7 +1944,7 @@ public class FrmThongKeHoaDon extends JFrame {
             if (khongCoDuLieu) {
                 g2.setFont(font(Font.ITALIC, 13));
                 g2.setColor(MUTED);
-                String chu = "Không có doanh thu trong kỳ";
+                String chu = "Không có doanh thu hoặc công nợ trong kỳ";
                 g2.drawString(chu, LE_TRAI + (rong - g2.getFontMetrics().stringWidth(chu)) / 2, LE_TREN + cao / 2);
             }
 
@@ -1656,7 +1953,7 @@ public class FrmThongKeHoaDon extends JFrame {
             g2.setFont(font(Font.BOLD, 12));
             fm = g2.getFontMetrics();
             g2.drawString(tenTrucX, LE_TRAI + (rong - fm.stringWidth(tenTrucX)) / 2, getHeight() - 12);
-            String tenTrucY = "Doanh thu (VNĐ)";
+            String tenTrucY = "Số tiền (VNĐ)";
             g2.rotate(-Math.PI / 2);
             g2.drawString(tenTrucY, -(LE_TREN + cao / 2 + fm.stringWidth(tenTrucY) / 2), 14);
             g2.dispose();
@@ -1669,7 +1966,12 @@ public class FrmThongKeHoaDon extends JFrame {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {
             }
-            new FrmThongKeHoaDon().setVisible(true);
+            JFrame winThuNghiem = new JFrame("Hệ thống quản lý gara ô tô");
+            winThuNghiem.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            winThuNghiem.setContentPane(new FrmThongKeDoanhThu());
+            winThuNghiem.pack();
+            winThuNghiem.setLocationRelativeTo(null);
+            winThuNghiem.setVisible(true);
         });
     }
 }

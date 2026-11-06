@@ -1,19 +1,40 @@
 package dao;
 
-import connectDB.ConnectDB;
 import entity.LichLamViec;
+import entity.CaLamViec;
+import entity.NhanVien;
+import util.DatabaseConnection;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-public class LichLamViecDAO extends BaseDAO<LichLamViec> {
-    public LichLamViecDAO() {
-        super(LichLamViec.class, "LichLamViec", "maLich");
+public class LichLamViecDAO {
+    public List<LichLamViec> findAll() throws SQLException {
+        String sql = "SELECT maLich, maCa, maNV, ngayLamViec, trangThai FROM LichLamViec ORDER BY ngayLamViec DESC";
+        List<LichLamViec> danhSach = new ArrayList<>();
+        try (Connection connection = moKetNoi();
+                PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                danhSach.add(new LichLamViec(
+                        resultSet.getString("maLich"),
+                        new CaLamViec(resultSet.getString("maCa")),
+                        new NhanVien(resultSet.getString("maNV")),
+                        resultSet.getDate("ngayLamViec"),
+                        resultSet.getString("trangThai")));
+            }
+        }
+        return danhSach;
     }
 
     public List<PhanCong> layPhanCong(LocalDate tuNgay, LocalDate denNgay) throws SQLException {
@@ -39,6 +60,49 @@ public class LichLamViecDAO extends BaseDAO<LichLamViec> {
                 return danhSach;
             }
         }
+    }
+
+    public List<NhanVienTrongCa> layNhanVienTrongCa(LocalDateTime thoiDiem) throws SQLException {
+        String sql = "SELECT ll.ngayLamViec, ll.maNV, nv.hoTen, ca.gioBatDau, ca.gioKetThuc "
+                + "FROM LichLamViec ll "
+                + "JOIN NhanVien nv ON nv.maNV = ll.maNV "
+                + "JOIN CaLamViec ca ON ca.maCa = ll.maCa "
+                + "WHERE ll.ngayLamViec >= ? AND ll.ngayLamViec < ? "
+                + "AND ll.trangThai <> N'Vắng mặt' "
+                + "ORDER BY nv.hoTen, ll.maNV";
+        LocalDate homNay = thoiDiem.toLocalDate();
+        LocalTime gioHienTai = thoiDiem.toLocalTime();
+        try (Connection connection = moKetNoi();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setDate(1, Date.valueOf(homNay.minusDays(1)));
+            statement.setDate(2, Date.valueOf(homNay.plusDays(1)));
+            try (ResultSet resultSet = statement.executeQuery()) {
+                Map<String, NhanVienTrongCa> nhanVienTrongCa = new LinkedHashMap<>();
+                while (resultSet.next()) {
+                    LocalDate ngayLamViec = resultSet.getDate("ngayLamViec").toLocalDate();
+                    LocalTime gioBatDau = resultSet.getTime("gioBatDau").toLocalTime();
+                    LocalTime gioKetThuc = resultSet.getTime("gioKetThuc").toLocalTime();
+                    if (laCaDangDienRa(ngayLamViec, gioBatDau, gioKetThuc, homNay, gioHienTai)) {
+                        String maNV = resultSet.getString("maNV");
+                        nhanVienTrongCa.putIfAbsent(maNV,
+                                new NhanVienTrongCa(maNV, resultSet.getString("hoTen")));
+                    }
+                }
+                return new ArrayList<>(nhanVienTrongCa.values());
+            }
+        }
+    }
+
+    private boolean laCaDangDienRa(
+            LocalDate ngayLamViec, LocalTime gioBatDau, LocalTime gioKetThuc,
+            LocalDate homNay, LocalTime gioHienTai) {
+        if (gioBatDau.isBefore(gioKetThuc)) {
+            return ngayLamViec.equals(homNay)
+                    && !gioHienTai.isBefore(gioBatDau)
+                    && gioHienTai.isBefore(gioKetThuc);
+        }
+        return (ngayLamViec.equals(homNay) && !gioHienTai.isBefore(gioBatDau))
+                || (ngayLamViec.plusDays(1).equals(homNay) && gioHienTai.isBefore(gioKetThuc));
     }
 
     public boolean themPhanCong(String maLich, String maCa, String maNV, LocalDate ngayLamViec)
@@ -108,15 +172,14 @@ public class LichLamViecDAO extends BaseDAO<LichLamViec> {
     }
 
     private Connection moKetNoi() throws SQLException {
-        ConnectDB.getInstance().connect();
-        Connection connection = ConnectDB.getConnection();
-        if (connection == null) {
-            throw new SQLException("Không thể kết nối cơ sở dữ liệu.");
-        }
-        return connection;
+        return DatabaseConnection.open();
     }
 
     public record PhanCong(String maLich, String maCa, String maNV, String hoTen,
             LocalDate ngayLamViec, String trangThai) {
     }
+
+    public record NhanVienTrongCa(String maNV, String hoTen) {
+    }
+
 }
