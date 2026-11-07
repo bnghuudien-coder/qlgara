@@ -12,7 +12,6 @@ import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Insets;
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
@@ -47,12 +46,7 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
-import dao.ChiTietPhieuSuaChuaDAO;
-import dao.DichVuDAO;
-import dao.PhieuKiemTraDAO;
-import dao.PhieuSuaChuaDAO;
-import dao.PhuTungDAO;
-import dao.XeDAO;
+import controller.PhieuSuaChuaController;
 import entity.ChiTietPhieuSuaChua;
 import entity.DichVu;
 import entity.PhieuKiemTra;
@@ -60,7 +54,6 @@ import entity.PhieuSuaChua;
 import entity.PhuTung;
 import entity.TaiKhoan;
 import entity.Xe;
-import util.MaTuDong;
 
 public class FrmPhieuSuaChua extends JPanel {
     private static final Color PALE_BLUE = new Color(242, 247, 255);
@@ -115,14 +108,16 @@ public class FrmPhieuSuaChua extends JPanel {
             }, 0);
     private final JTable tblChiTietCongViec = new JTable(modelChiTiet);
 
-    private final PhieuSuaChuaDAO phieuSuaChuaDAO = new PhieuSuaChuaDAO();
-    private final ChiTietPhieuSuaChuaDAO chiTietDAO = new ChiTietPhieuSuaChuaDAO();
-    private final DichVuDAO dichVuDAO = new DichVuDAO();
-    private final PhuTungDAO phuTungDAO = new PhuTungDAO();
-    private final PhieuKiemTraDAO phieuKiemTraDAO = new PhieuKiemTraDAO();
-    private final XeDAO xeDAO = new XeDAO();
     private final TaiKhoan taiKhoanHienTai;
     private final Map<String, String> bienSoTheoMaXe = new HashMap<>();
+    private JButton btnThemPhieu;
+    private JButton btnCapNhatPhieu;
+    private JButton btnXoaPhieu;
+    private JButton btnLamMoiPhieu;
+    private JButton btnThemChiTiet;
+    private JButton btnXoaChiTiet;
+    private AppButton btnTaiLai;
+    private final PhieuSuaChuaController controller;
 
     private final DecimalFormat df = new DecimalFormat("#,### VNĐ");
 
@@ -227,13 +222,10 @@ public class FrmPhieuSuaChua extends JPanel {
             txtMaNhanVien.setText(maNV.isEmpty() ? phieuKiemTra.getNhanVien().getMaNV() : maNV);
         });
 
-        napDanhSachPhieuSuaChua();
-        napDanhSachDichVu();
-        napDanhSachPhuTung();
-        napDanhSachPhieuKiemTra();
         txtSoluong.setText("1");
         tblPhieuSuaChua.setRowSorter(sortedPhieuKiemTra);
-        lamMoiForm();
+        controller = new PhieuSuaChuaController(this, taiKhoanHienTai);
+        controller.khoiTao();
     }
 
     private JPanel createHeading() {
@@ -304,38 +296,34 @@ public class FrmPhieuSuaChua extends JPanel {
 
         JPanel pnlButtons = new JPanel(new GridBagLayout());
         pnlButtons.setOpaque(false);
-        JButton btnAdd = createButton(
+        btnThemPhieu = createButton(
                 "Tạo phiếu",
                 new ImageIcon(getClass().getResource("/resources/icons/plus.png")),
                 new Color(0x33cc33),
                 new Color(0xffffff));
-        btnAdd.addActionListener(e -> themPhieuSuaChua());
 
-        JButton btnUpdate = createButton(
+        btnCapNhatPhieu = createButton(
                 "Cập nhật",
                 new ImageIcon(getClass().getResource("/resources/icons/update.png")),
                 new Color(0x3366cc),
                 new Color(0xffffff));
-        btnUpdate.addActionListener(e -> capNhatPhieuSuaChua());
 
-        JButton btnDel = createButton(
+        btnXoaPhieu = createButton(
                 "Xóa",
                 new ImageIcon(getClass().getResource("/resources/icons/trash.png")),
                 new Color(0xff0033),
                 new Color(0xffffff));
-        btnDel.addActionListener(e -> xoaPhieuSuaChua());
 
-        JButton btnReset = createButton(
+        btnLamMoiPhieu = createButton(
                 "Làm mới",
                 new ImageIcon(getClass().getResource("/resources/icons/reset.png")),
                 new Color(0x555555),
                 new Color(0xffffff));
-        btnReset.addActionListener(e -> lamMoiForm());
 
-        pnlButtons.add(btnAdd, buttonConstraints(0));
-        pnlButtons.add(btnUpdate, buttonConstraints(1));
-        pnlButtons.add(btnDel, buttonConstraints(2));
-        pnlButtons.add(btnReset, buttonConstraints(3));
+        pnlButtons.add(btnThemPhieu, buttonConstraints(0));
+        pnlButtons.add(btnCapNhatPhieu, buttonConstraints(1));
+        pnlButtons.add(btnXoaPhieu, buttonConstraints(2));
+        pnlButtons.add(btnLamMoiPhieu, buttonConstraints(3));
 
         JPanel pnlLower = new JPanel(new BorderLayout());
         pnlLower.setOpaque(false);
@@ -369,22 +357,20 @@ public class FrmPhieuSuaChua extends JPanel {
 
         JPanel pnlButton = new JPanel(new GridBagLayout());
         pnlButton.setOpaque(false);
-        JButton btnAdd = createButton(
+        btnThemChiTiet = createButton(
                 "Thêm chi tiết",
                 new ImageIcon(getClass().getResource("/resources/icons/plus.png")),
                 new Color(0x33cc33),
                 new Color(0xffffff));
-        btnAdd.addActionListener(e -> themChiTiet());
 
-        JButton btnDel = createButton(
+        btnXoaChiTiet = createButton(
                 "Xóa chi tiết",
                 new ImageIcon(getClass().getResource("/resources/icons/trash.png")),
                 new Color(0xff0033),
                 new Color(0xffffff));
-        btnDel.addActionListener(e -> xoaChiTiet());
 
-        pnlButton.add(btnAdd, buttonConstraints(0));
-        pnlButton.add(btnDel, buttonConstraints(1));
+        pnlButton.add(btnThemChiTiet, buttonConstraints(0));
+        pnlButton.add(btnXoaChiTiet, buttonConstraints(1));
 
         JPanel pnlLower = new JPanel(new BorderLayout());
         pnlLower.setOpaque(false);
@@ -419,12 +405,6 @@ public class FrmPhieuSuaChua extends JPanel {
 
         JScrollPane scrSuaChua = createScroll(tblPhieuSuaChua, 280);
 
-        tblPhieuSuaChua.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && tblPhieuSuaChua.getSelectedRow() >= 0) {
-                hienThiDaChon();
-            }
-        });
-
         pnlTable.add(pnlHeader, BorderLayout.NORTH);
         pnlTable.add(scrSuaChua, BorderLayout.CENTER);
         return pnlTable;
@@ -458,13 +438,7 @@ public class FrmPhieuSuaChua extends JPanel {
         pnlLoc.add(createSearchField("Mã phiếu sửa chữa", txtLocMaPhieuSuaChua));
         pnlLoc.add(createSearchField("Mã xe", txtLocMaXe));
         pnlLoc.add(createSearchField("Mã khách hàng", txtLocMaKH));
-        AppButton btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
-        btnTaiLai.addActionListener(e -> {
-            txtLocMaPhieuSuaChua.setText("");
-            txtLocMaXe.setText("");
-            txtLocMaKH.setText("");
-            napDanhSachPhieuSuaChua();
-        });
+        btnTaiLai = new AppButton("Tải lại", AppButton.Style.SECONDARY);
         pnlSearch.add(pnlLoc, BorderLayout.CENTER);
         pnlSearch.add(btnTaiLai, BorderLayout.EAST);
         themBoLangNghe(txtLocMaPhieuSuaChua);
@@ -586,17 +560,7 @@ public class FrmPhieuSuaChua extends JPanel {
         return scrPanel;
     }
 
-    private void napDanhSachPhieuSuaChua() {
-        try {
-            List<PhieuSuaChua> danhSach = phieuSuaChuaDAO.findAll();
-            hienThiDanhSachPhieuSuaChua(danhSach);
-            lblThongBao.setText("Đã tải " + danhSach.size() + " phiếu sửa chữa");
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách phiếu: " + e.getMessage());
-        }
-    }
-
-    private void hienThiDanhSachPhieuSuaChua(List<PhieuSuaChua> danhSach) {
+    public void hienThiDanhSachPhieuSuaChua(List<PhieuSuaChua> danhSach) {
         tblPhieuSuaChua.setRowSorter(null);
         modelSuaChua.setRowCount(0);
         for (PhieuSuaChua phieu : danhSach) {
@@ -616,70 +580,66 @@ public class FrmPhieuSuaChua extends JPanel {
         tblPhieuSuaChua.repaint();
     }
 
-    private void napDanhSachDichVu() {
-        try {
-            List<DichVu> danhSach = dichVuDAO.findAll();
-            cboMaDichVu.removeAllItems();
-            DichVu khong = new DichVu();
-            khong.setTenDV("Không");
-            cboMaDichVu.addItem(khong);
-            for (DichVu dichVu : danhSach) {
-                cboMaDichVu.addItem(dichVu);
-            }
-            if (danhSach.isEmpty()) {
-                lblThongBao.setText("Chưa có dữ liệu dịch vụ");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách dịch vụ: " + e.getMessage());
+    public void hienThiDanhSachDichVu(List<DichVu> danhSach) {
+        cboMaDichVu.removeAllItems();
+        DichVu khong = new DichVu();
+        khong.setTenDV("Không");
+        cboMaDichVu.addItem(khong);
+        for (DichVu dichVu : danhSach) {
+            cboMaDichVu.addItem(dichVu);
+        }
+        if (danhSach.isEmpty()) {
+            lblThongBao.setText("Chưa có dữ liệu dịch vụ");
         }
     }
 
-    private final void napDanhSachPhuTung() {
-        try {
-            List<PhuTung> danhSach = phuTungDAO.findAll();
-            cboPhuTung.removeAllItems();
-            PhuTung khong = new PhuTung();
-            khong.setTenPhuTung("Không");
-            cboPhuTung.addItem(khong);
-            for (PhuTung phuTung : danhSach) {
-                cboPhuTung.addItem(phuTung);
-            }
-            if (danhSach.isEmpty()) {
-                lblThongBao.setText("Chưa có dữ liệu phụ tùng");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách phụ tùng: " + e.getMessage());
+    public void hienThiDanhSachPhuTung(List<PhuTung> danhSach) {
+        cboPhuTung.removeAllItems();
+        PhuTung khong = new PhuTung();
+        khong.setTenPhuTung("Không");
+        cboPhuTung.addItem(khong);
+        for (PhuTung phuTung : danhSach) {
+            cboPhuTung.addItem(phuTung);
+        }
+        if (danhSach.isEmpty()) {
+            lblThongBao.setText("Chưa có dữ liệu phụ tùng");
         }
     }
 
-    private void napDanhSachPhieuKiemTra() {
-        try {
-            List<PhieuKiemTra> danhSach = phieuKiemTraDAO.findAll();
-            Map<String, String> bienSoMoi = new HashMap<>();
-            for (Xe xe : xeDAO.findAll()) {
-                bienSoMoi.put(xe.getMaXe(), xe.getBienSo());
-            }
-            bienSoTheoMaXe.clear();
-            bienSoTheoMaXe.putAll(bienSoMoi);
-            cboPhieuKiemTra.removeAll();
-            for (PhieuKiemTra phieuKiemTra : danhSach) {
-                cboPhieuKiemTra.addItem(phieuKiemTra);
-            }
-            if (danhSach.isEmpty()) {
-                lblThongBao.setText("Chưa có dữ liệu phiếu kiểm tra");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách phiếu kiểm tra: " + e.getMessage());
+    public void hienThiDanhSachPhieuKiemTra(
+            List<PhieuKiemTra> danhSach, Map<String, String> bienSoMoi) {
+        bienSoTheoMaXe.clear();
+        bienSoTheoMaXe.putAll(bienSoMoi);
+        cboPhieuKiemTra.removeAll();
+        for (PhieuKiemTra phieuKiemTra : danhSach) {
+            cboPhieuKiemTra.addItem(phieuKiemTra);
+        }
+        if (danhSach.isEmpty()) {
+            lblThongBao.setText("Chưa có dữ liệu phiếu kiểm tra");
         }
     }
 
-    private void hienThiLoi(String message) {
+    public void hienThiLoi(String message) {
         lblThongBao.setText(message);
         lblThongBao.setForeground(new Color(190, 55, 55));
         JOptionPane.showMessageDialog(this, message, "Phiếu sửa chữa", JOptionPane.ERROR_MESSAGE);
     }
 
-    private PhieuSuaChua docThongTinPhieuSuaChua() {
+    public void baoLoi(String tieuDe, String chiTiet) {
+        hienThiLoi(chiTiet == null || chiTiet.isBlank() ? tieuDe : tieuDe + ": " + chiTiet);
+    }
+
+    public void thongBao(String message) {
+        lblThongBao.setForeground(MUTED);
+        lblThongBao.setText(message);
+    }
+
+    public void thongBaoThanhCong(String message) {
+        lblThongBao.setForeground(new Color(38, 130, 75));
+        lblThongBao.setText(message);
+    }
+
+    public PhieuSuaChua layPhieuNhap() {
         if (cboPhieuKiemTra.getItemCount() == 0) {
             throw new IllegalArgumentException("Chưa có phiếu kiểm tra để tạo phiếu sửa chữa.");
         }
@@ -751,83 +711,14 @@ public class FrmPhieuSuaChua extends JPanel {
         }
     }
 
-    private void themPhieuSuaChua() {
-        try {
-            PhieuSuaChua phieu = docThongTinPhieuSuaChua();
-
-            if (phieuSuaChuaDAO.insert(phieu)) {
-                napDanhSachPhieuSuaChua();
-                lamMoiForm();
-                lblThongBao.setText("Đã tạo phiếu " + phieu.getMaPhieuSuaChua());
-            }
-        } catch (IllegalArgumentException e) {
-            hienThiLoi(e.getMessage());
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tạo phiếu sửa chữa: " + e.getMessage());
-        }
-    }
-
-    private void capNhatPhieuSuaChua() {
-        try {
-            PhieuSuaChua phieu = docThongTinPhieuSuaChua();
-            if (phieuSuaChuaDAO.update(phieu)) {
-                napDanhSachPhieuSuaChua();
-                lblThongBao.setText("Đã cập nhật phiếu " + phieu.getMaPhieuSuaChua());
-            } else {
-                hienThiLoi("Không tìm thấy phiếu cần cập nhật");
-            }
-        } catch (IllegalArgumentException e) {
-            hienThiLoi(e.getMessage());
-        } catch (SQLException e) {
-            lblThongBao.setText("Không thể cập nhật phiếu sửa chữa: " + e.getMessage());
-        }
-    }
-
-    private void xoaPhieuSuaChua() {
-        String maPSC = txtMaPhieuSuaChua.getText().trim();
-        if (maPSC == null || maPSC.isEmpty()) {
-            hienThiLoi("Hãy chọn phiếu cần xóa");
-            return;
-        }
-        int luaChon = JOptionPane.showConfirmDialog(
-                this,
-                "Bạn có chắc muốn xóa phiếu " + maPSC + "?",
-                "Xác nhận xóa",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-
-        try {
-            if (phieuSuaChuaDAO.deleteById(maPSC)) {
-                napDanhSachPhieuSuaChua();
-                lamMoiForm();
-                lblThongBao.setText("Đã xóa phiếu " + maPSC);
-            } else {
-                hienThiLoi("Không tìm thấy phiếu cần xóa");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể xóa phiếu sửa chữa: " + e.getMessage());
-        }
-    }
-
-    private void lamMoiForm() {
-        try {
-            txtMaPhieuSuaChua.setText(MaTuDong.sinhMa(
-                    MaTuDong.TIEN_TO_PHIEU_SUA_CHUA,
-                    phieuSuaChuaDAO.findAll(),
-                    PhieuSuaChua::getMaPhieuSuaChua));
-        } catch (SQLException exception) {
-            hienThiLoi("Không thể phát sinh mã phiếu sửa chữa: " + exception.getMessage());
-        }
+    public void lamMoiForm(String maMoi, String maNhanVienMacDinh) {
+        txtMaPhieuSuaChua.setText(maMoi);
         if (cboPhieuKiemTra.getItemCount() > 0) {
             cboPhieuKiemTra.setSelectedIndex(0);
         }
         txtMaXe.setText("");
         txtMaKhachHang.setText("");
-        txtMaNhanVien.setText(maNhanVienDangNhap());
+        txtMaNhanVien.setText(maNhanVienMacDinh);
         txtNgayBatDau.setText("");
         txtNgayHoanThanhDuKien.setText("");
         tblPhieuSuaChua.clearSelection();
@@ -836,11 +727,11 @@ public class FrmPhieuSuaChua extends JPanel {
     private String maNhanVienDangNhap() {
         return taiKhoanHienTai == null || taiKhoanHienTai.getNhanVien() == null
                 || taiKhoanHienTai.getNhanVien().getMaNV() == null
-                ? ""
-                : taiKhoanHienTai.getNhanVien().getMaNV().trim();
+                        ? ""
+                        : taiKhoanHienTai.getNhanVien().getMaNV().trim();
     }
 
-    private void hienThiDaChon() {
+    public void hienThiDaChon() {
         int selectedRow = tblPhieuSuaChua.getSelectedRow();
         if (selectedRow < 0)
             return;
@@ -861,14 +752,17 @@ public class FrmPhieuSuaChua extends JPanel {
         txtMaNhanVien.setText(cellText(modelSuaChua.getValueAt(modelRow, 4)));
         txtNgayBatDau.setText(cellText(modelSuaChua.getValueAt(modelRow, 5)));
         txtNgayHoanThanhDuKien.setText(cellText(modelSuaChua.getValueAt(modelRow, 6)));
-        hienThiChiTiet();
+    }
+
+    public void hienThiPhieuDangChon() {
+        hienThiDaChon();
     }
 
     private String cellText(Object value) {
         return value == null ? "" : value.toString();
     }
 
-    private ChiTietPhieuSuaChua docChiTietPhieuSuaChua() {
+    public ChiTietPhieuSuaChua layChiTietNhap() {
         PhuTung phuTung = (PhuTung) cboPhuTung.getSelectedItem();
         DichVu dichVu = (DichVu) cboMaDichVu.getSelectedItem();
         String maPSC = txtMaPhieuSuaChua.getText().trim();
@@ -894,9 +788,6 @@ public class FrmPhieuSuaChua extends JPanel {
             throw new IllegalArgumentException("Số lượng phải là số nguyên");
         }
 
-        if (soLuong <= 0) {
-            throw new IllegalArgumentException("Số lượng phải lớn hơn 0");
-        }
         BigDecimal donGia;
         try {
             String donGiaText = txtDonGia.getText().replace(",", "").replace(" VNĐ", "").trim();
@@ -907,106 +798,33 @@ public class FrmPhieuSuaChua extends JPanel {
         if (donGia.signum() < 0) {
             throw new IllegalArgumentException("Đơn giá không được âm");
         }
-
         ChiTietPhieuSuaChua chiTiet = new ChiTietPhieuSuaChua();
         chiTiet.setMaPhieuSuaChua(maPSC);
         chiTiet.setMaPhuTung(maPhuTung);
         chiTiet.setMaDV(maDichVu);
         chiTiet.setSoLuong(soLuong);
         chiTiet.setDonGia(donGia);
-        BigDecimal thanhTien = donGia.multiply(BigDecimal.valueOf(soLuong));
-        txtThanhTien.setText(thanhTien.toPlainString());
-
+        txtThanhTien.setText(donGia.multiply(BigDecimal.valueOf(soLuong)).toPlainString());
         return chiTiet;
     }
 
-    private void hienThiChiTiet() {
-        try {
-            String maPSC = txtMaPhieuSuaChua.getText().trim();
-            if (maPSC.isEmpty()) {
-                modelChiTiet.setRowCount(0);
-                return;
-            }
-            List<ChiTietPhieuSuaChua> danhSach = chiTietDAO.findByField("maPhieuSuaChua", maPSC);
-            modelChiTiet.setRowCount(0);
-            for (ChiTietPhieuSuaChua chiTiet : danhSach) {
-                BigDecimal donGia = chiTiet.getDonGia() == null ? BigDecimal.ZERO : chiTiet.getDonGia();
-                int soLuong = chiTiet.getSoLuong() == null ? 1 : chiTiet.getSoLuong();
-                BigDecimal thanhTien = donGia.multiply(BigDecimal.valueOf(soLuong));
-                PhuTung phuTung = chiTiet.getMaPhuTung() == null
-                        ? null
-                        : phuTungDAO.findById(chiTiet.getMaPhuTung());
-                DichVu dichVu = chiTiet.getMaDV() == null
-                        ? null
-                        : dichVuDAO.findById(chiTiet.getMaDV());
-                modelChiTiet.addRow(new Object[] {
-                        chiTiet.getMaChiTiet(),
-                        chiTiet.getMaPhuTung(),
-                        phuTung == null ? "" : phuTung.getTenPhuTung(),
-                        chiTiet.getMaDV(),
-                        dichVu == null ? "" : dichVu.getTenDV(),
-                        soLuong,
-                        donGia,
-                        thanhTien
-                });
-            }
-            lblThongBao.setText("Đã tải " + danhSach.size() + " chi tiết");
-        } catch (SQLException e) {
-            hienThiLoi("Không thể tải danh sách: " + e.getMessage());
+    public void hienThiChiTiet(List<ChiTietPhieuSuaChua> danhSach,
+            Map<String, PhuTung> phuTungTheoMa, Map<String, DichVu> dichVuTheoMa) {
+        modelChiTiet.setRowCount(0);
+        for (ChiTietPhieuSuaChua chiTiet : danhSach) {
+            BigDecimal donGia = chiTiet.getDonGia() == null ? BigDecimal.ZERO : chiTiet.getDonGia();
+            int soLuong = chiTiet.getSoLuong() == null ? 1 : chiTiet.getSoLuong();
+            BigDecimal thanhTien = donGia.multiply(BigDecimal.valueOf(soLuong));
+            PhuTung phuTung = phuTungTheoMa.get(chiTiet.getMaPhuTung());
+            DichVu dichVu = dichVuTheoMa.get(chiTiet.getMaDV());
+            modelChiTiet.addRow(new Object[] { chiTiet.getMaChiTiet(), chiTiet.getMaPhuTung(),
+                    phuTung == null ? "" : phuTung.getTenPhuTung(), chiTiet.getMaDV(),
+                    dichVu == null ? "" : dichVu.getTenDV(), soLuong, donGia, thanhTien });
         }
+        lblThongBao.setText("Đã tải " + danhSach.size() + " chi tiết");
     }
 
-    private void themChiTiet() {
-        try {
-            ChiTietPhieuSuaChua chiTiet = docChiTietPhieuSuaChua();
-            if (chiTietDAO.insert(chiTiet)) {
-                hienThiChiTiet();
-                lblThongBao.setText("Đã thêm chi tiết vào phiếu");
-            }
-        } catch (IllegalArgumentException e) {
-            hienThiLoi(e.getMessage());
-        } catch (SQLException e) {
-            hienThiLoi("Không thể thêm chi tiết: " + e.getMessage());
-        }
-    }
-
-    private void xoaChiTiet() {
-        String maPSC = txtMaPhieuSuaChua.getText().trim();
-        if (maPSC.isEmpty()) {
-            hienThiLoi("Mã phiếu sửa chữa không được để trống");
-            return;
-        }
-        int selectedRow = tblChiTietCongViec.getSelectedRow();
-        if (selectedRow < 0) {
-            hienThiLoi("Hãy chọn chi tiết cần xóa trong bảng");
-            return;
-        }
-        int modelRow = tblChiTietCongViec.convertRowIndexToModel(selectedRow);
-        Long maChiTiet = Long.valueOf(modelChiTiet.getValueAt(modelRow, 0).toString());
-        int luaChon = JOptionPane.showConfirmDialog(
-                this,
-                "Bạn có chắc muốn xóa chi tiết khỏi phiếu " + maPSC + "?",
-                "Xác nhận xóa",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE);
-
-        if (luaChon != JOptionPane.YES_OPTION) {
-            return;
-        }
-        try {
-            if (chiTietDAO.deleteById(maChiTiet)) {
-                hienThiChiTiet();
-                lamMoiFormChiTiet();
-                lblThongBao.setText("Đã xóa chi tiết");
-            } else {
-                hienThiLoi("Không tìm thấy chi tiết cần xóa");
-            }
-        } catch (SQLException e) {
-            hienThiLoi("Không thể xóa chi tiết dịch vụ: " + e.getMessage());
-        }
-    }
-
-    private void lamMoiFormChiTiet() {
+    public void lamMoiFormChiTiet() {
         if (cboMaDichVu.getItemCount() > 0) {
             cboMaDichVu.setSelectedIndex(0);
         }
@@ -1017,6 +835,79 @@ public class FrmPhieuSuaChua extends JPanel {
         txtSoluong.setText("1");
         txtThanhTien.setText("");
         tblChiTietCongViec.clearSelection();
+    }
+
+    public JButton layNutThemPhieu() {
+        return btnThemPhieu;
+    }
+
+    public JButton layNutCapNhatPhieu() {
+        return btnCapNhatPhieu;
+    }
+
+    public JButton layNutXoaPhieu() {
+        return btnXoaPhieu;
+    }
+
+    public JButton layNutLamMoiPhieu() {
+        return btnLamMoiPhieu;
+    }
+
+    public JButton layNutThemChiTiet() {
+        return btnThemChiTiet;
+    }
+
+    public JButton layNutXoaChiTiet() {
+        return btnXoaChiTiet;
+    }
+
+    public AppButton layNutTaiLai() {
+        return btnTaiLai;
+    }
+
+    public JTable layBangPhieuSuaChua() {
+        return tblPhieuSuaChua;
+    }
+
+    public String layMaPhieuNhap() {
+        return txtMaPhieuSuaChua.getText().trim();
+    }
+
+    public Long layMaChiTietDangChon() {
+        int selectedRow = tblChiTietCongViec.getSelectedRow();
+        if (selectedRow < 0)
+            return null;
+        int modelRow = tblChiTietCongViec.convertRowIndexToModel(selectedRow);
+        return Long.valueOf(modelChiTiet.getValueAt(modelRow, 0).toString());
+    }
+
+    public boolean xacNhanXoaPhieu(String maPSC) {
+        if (maPSC.isEmpty()) {
+            baoLoi("Mã phiếu sửa chữa không được để trống", null);
+            return false;
+        }
+        return JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa phiếu " + maPSC + "?",
+                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    public boolean xacNhanXoaChiTiet() {
+        String maPSC = layMaPhieuNhap();
+        if (maPSC.isEmpty()) {
+            baoLoi("Mã phiếu sửa chữa không được để trống", null);
+            return false;
+        }
+        if (layMaChiTietDangChon() == null) {
+            baoLoi("Hãy chọn chi tiết cần xóa trong bảng", null);
+            return false;
+        }
+        return JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa chi tiết khỏi phiếu " + maPSC + "?",
+                "Xác nhận xóa", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+    }
+
+    public void xoaBoLoc() {
+        txtLocMaPhieuSuaChua.setText("");
+        txtLocMaXe.setText("");
+        txtLocMaKH.setText("");
     }
 
     private void capNhatThanhTien() {

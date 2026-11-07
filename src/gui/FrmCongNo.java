@@ -1,12 +1,16 @@
 package gui;
 
-import connectDB.ConnectDB;
+import controller.CongNoController;
+import dao.CongNoDao;
+import entity.CongNo;
+import entity.KhachHang;
 import java.awt.*;
-import java.awt.event.*;
 import java.math.BigDecimal;
-import java.sql.*;
+import java.sql.SQLException;
 import java.text.DecimalFormat;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.table.*;
@@ -27,56 +31,18 @@ public class FrmCongNo extends JPanel {
     // Định dạng
     private static final DecimalFormat MONEY = new DecimalFormat("#,##0");
     private static final DateTimeFormatter DMY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    // Giá trị lọc / trạng thái
-    private static final String TAT_CA = "Tất cả";
-    private static final String CON_NO = "Còn nợ";
-    private static final String DA_TT = "Đã thanh toán";
-    // Câu lệnh SQL
-    private static final String SQL_CONG_NO = "SELECT kh.maKH, kh.hoTen, kh.soDT, " +
-            "ISNULL(cn.tongNo, 0) AS tongNo, ISNULL(cn.soHDNo, 0) AS soHDNo, " +
-            "cn.ngayCapNhat AS ngayCapNhat " +
-            "FROM KhachHang kh " +
-            "OUTER APPLY (SELECT " +
-            " SUM(CASE WHEN hd.soTien-ISNULL(tt.daTra,0)>0 " +
-            " THEN hd.soTien-ISNULL(tt.daTra,0) ELSE 0 END) AS tongNo, " +
-            " SUM(CASE WHEN hd.maHoaDon IS NOT NULL AND hd.soTien-ISNULL(tt.daTra,0)>0 " +
-            " THEN 1 ELSE 0 END) AS soHDNo, MAX(hd.ngayLap) AS ngayCapNhat " +
-            " FROM PhieuSuaChua p JOIN HoaDon hd ON hd.maPhieuSuaChua=p.maPhieuSuaChua " +
-            " OUTER APPLY (SELECT SUM(g.soTienThanhToan) AS daTra FROM GiaoDichThanhToan g " +
-            " WHERE g.maHoaDon=hd.maHoaDon " +
-            " AND (g.trangThaiGD IS NULL OR g.trangThaiGD=N'Thành công')) tt " +
-            " WHERE p.maKH=kh.maKH) cn " +
-            "WHERE ISNULL(cn.tongNo, 0) > 0 " +
-            "AND (? = '' OR kh.maKH LIKE ? OR kh.hoTen LIKE ? OR kh.soDT LIKE ? " +
-            " OR EXISTS (SELECT 1 FROM PhieuSuaChua p2 JOIN HoaDon h2 ON h2.maPhieuSuaChua=p2.maPhieuSuaChua " +
-            " WHERE p2.maKH=kh.maKH AND h2.maHoaDon LIKE ?)) " +
-            "AND (? = N'Tất cả' OR (? = N'Còn nợ' AND ISNULL(cn.tongNo,0) > 0) " +
-            " OR (? = N'Đã thanh toán' AND ISNULL(cn.tongNo,0) <= 0)) " +
-            "AND (? = N'Tất cả' OR EXISTS (SELECT 1 FROM PhieuSuaChua p3 " +
-            " JOIN HoaDon h3 ON h3.maPhieuSuaChua=p3.maPhieuSuaChua WHERE p3.maKH=kh.maKH " +
-            " AND ((? = N'Hôm nay' AND CAST(h3.ngayLap AS DATE)=CAST(GETDATE() AS DATE)) " +
-            " OR (? = N'7 ngày gần nhất' AND h3.ngayLap >= DATEADD(DAY,-7,GETDATE())) " +
-            " OR (? = N'30 ngày gần nhất' AND h3.ngayLap >= DATEADD(DAY,-30,GETDATE()))))) " +
-            "ORDER BY cn.ngayCapNhat DESC, kh.maKH";
-    // Thông tin một khách hàng
-    private static final String SQL_KHACH_HANG = "SELECT maKH, hoTen, soDT, diaChi FROM KhachHang WHERE maKH = ?";
-    // Hóa đơn còn nợ của một khách hàng
-    private static final String SQL_HOA_DON_NO = "SELECT hd.maHoaDon, hd.ngayLap, hd.soTien, ISNULL(tt.daTra,0) AS daTra, "
-            + "hd.soTien-ISNULL(tt.daTra,0) AS conPhaiTra "
-            + "FROM PhieuSuaChua psc JOIN HoaDon hd ON hd.maPhieuSuaChua=psc.maPhieuSuaChua "
-            + "OUTER APPLY (SELECT SUM(g.soTienThanhToan) daTra FROM GiaoDichThanhToan g "
-            + "WHERE g.maHoaDon=hd.maHoaDon AND (g.trangThaiGD IS NULL OR g.trangThaiGD=N'Thành công')) tt "
-            + "WHERE psc.maKH=? AND hd.soTien-ISNULL(tt.daTra,0)>0 ORDER BY hd.ngayLap";
 
     // THÀNH PHẦN GIAO DIỆN
     // Khung tìm kiếm
     private final JTextField txtTimKiem = new JTextField();
     private final JComboBox<String> cmbNhomKH = new JComboBox<>(
-            new String[] { TAT_CA, "Dưới 1 triệu", "1 - 5 triệu", "5 - 10 triệu", "Trên 10 triệu" });
+            new String[] { CongNo.TAT_CA, "Dưới 1 triệu", "1 - 5 triệu", "5 - 10 triệu", "Trên 10 triệu" });
     private final JComboBox<String> cmbTrangThai = new JComboBox<>(
-            new String[] { TAT_CA, CON_NO, DA_TT });
+            new String[] { CongNo.TAT_CA, CongNo.CON_NO, CongNo.DA_TT });
     private final JComboBox<String> cmbThoiGian = new JComboBox<>(
-            new String[] { TAT_CA, "Hôm nay", "7 ngày gần nhất", "30 ngày gần nhất" });
+            new String[] { CongNo.TAT_CA, "Hôm nay", "7 ngày gần nhất", "30 ngày gần nhất" });
+    private final JButton btnTimKiem = taoNutChinh("Tìm kiếm", BLUE);
+    private final JButton btnLamMoi = taoNutPhu("Làm mới");
     // Thống kê nhanh
     private final JLabel lblTongNo = new JLabel("0 đ");
     private final JLabel lblSoKHNo = new JLabel("0");
@@ -87,8 +53,6 @@ public class FrmCongNo extends JPanel {
             "Mã KH", "Tên khách hàng", "Số điện thoại", "Tổng công nợ",
             "Số hóa đơn nợ", "Trạng thái", "Ngày cập nhật");
     private JTable tblCongNo;
-    // Cờ chặn tải lại nhiều lần khi đặt lại các ô lọc
-    private boolean dangDatLaiBoLoc = false;
 
     // KHỞI TẠO
     public FrmCongNo() {
@@ -102,8 +66,9 @@ public class FrmCongNo extends JPanel {
         add(FormUI.createPage("QUẢN LÝ CÔNG NỢ",
                 "Theo dõi công nợ khách hàng và các hóa đơn chưa thanh toán", pnlNoiDung),
                 BorderLayout.CENTER);
-        ganSuKien();
-        taiDuLieu();
+
+        // Controller gắn sự kiện và tải dữ liệu lần đầu
+        new CongNoController(this, new CongNoDao());
     }
 
     // Phần 1: tìm kiếm / lọc (gọn trên một hàng)
@@ -114,12 +79,8 @@ public class FrmCongNo extends JPanel {
         txtTimKiem.setBorder(new CompoundBorder(new LineBorder(BORDER), new EmptyBorder(6, 9, 6, 9)));
         txtTimKiem.setToolTipText("Tìm theo mã KH, tên KH, SĐT hoặc mã hóa đơn");
 
-        JButton btnTimKiem = taoNutChinh("Tìm kiếm", BLUE);
-        JButton btnLamMoi = taoNutPhu("Làm mới");
         btnTimKiem.setPreferredSize(new Dimension(112, 32));
         btnLamMoi.setPreferredSize(new Dimension(92, 32));
-        btnTimKiem.addActionListener(e -> taiDuLieu());
-        btnLamMoi.addActionListener(e -> lamMoiBoLoc());
 
         JPanel pnlNut = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         pnlNut.setOpaque(false);
@@ -233,151 +194,85 @@ public class FrmCongNo extends JPanel {
         return sprVach;
     }
 
-    // SỰ KIỆN
-    private void ganSuKien() {
-        // Nhấn vào dòng bất kỳ -> mở chi tiết
-        tblCongNo.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                int dong = tblCongNo.rowAtPoint(e.getPoint());
-                if (dong >= 0) {
-                    tblCongNo.setRowSelectionInterval(dong, dong);
-                    moChiTiet(dong);
-                }
-            }
-        });
-
-        // Enter trên dòng đang chọn -> mở chi tiết
-        tblCongNo.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "moChiTiet");
-        tblCongNo.getActionMap().put("moChiTiet", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                int dong = tblCongNo.getSelectedRow();
-                if (dong >= 0) {
-                    moChiTiet(dong);
-                }
-            }
-        });
-
-        // Enter trong ô từ khóa hoặc đổi ô lọc -> tải lại danh sách
-        txtTimKiem.addActionListener(e -> taiDuLieu());
-        JComboBox<?>[] dsOLoc = { cmbNhomKH, cmbTrangThai, cmbThoiGian };
-        for (JComboBox<?> cmbLoc : dsOLoc) {
-            cmbLoc.addActionListener(e -> {
-                if (!dangDatLaiBoLoc) {
-                    taiDuLieu();
-                }
-            });
-        }
+    // TRUY CẬP CHO CONTROLLER
+    public JTextField getTxtTimKiem() {
+        return txtTimKiem;
     }
 
-    private void lamMoiBoLoc() {
-        dangDatLaiBoLoc = true;
+    public JComboBox<String> getCmbNhomKH() {
+        return cmbNhomKH;
+    }
+
+    public JComboBox<String> getCmbTrangThai() {
+        return cmbTrangThai;
+    }
+
+    public JComboBox<String> getCmbThoiGian() {
+        return cmbThoiGian;
+    }
+
+    public JButton getBtnTimKiem() {
+        return btnTimKiem;
+    }
+
+    public JButton getBtnLamMoi() {
+        return btnLamMoi;
+    }
+
+    public JTable getTblCongNo() {
+        return tblCongNo;
+    }
+
+    public String getTuKhoa() {
+        return txtTimKiem.getText().trim();
+    }
+
+    public String getNhomNo() {
+        return String.valueOf(cmbNhomKH.getSelectedItem());
+    }
+
+    public String getTrangThai() {
+        return String.valueOf(cmbTrangThai.getSelectedItem());
+    }
+
+    public String getThoiGian() {
+        return String.valueOf(cmbThoiGian.getSelectedItem());
+    }
+
+    // Mã KH của dòng đang hiển thị
+    public String layMaKH(int dongHienThi) {
+        int dong = tblCongNo.convertRowIndexToModel(dongHienThi);
+        return String.valueOf(modelCongNo.getValueAt(dong, 0));
+    }
+
+    // HIỂN THỊ DỮ LIỆU
+    public void datLaiBoLoc() {
         txtTimKiem.setText("");
         cmbNhomKH.setSelectedIndex(0);
         cmbTrangThai.setSelectedIndex(0);
         cmbThoiGian.setSelectedIndex(0);
-        dangDatLaiBoLoc = false;
-        taiDuLieu();
     }
 
-    private void moChiTiet(int dongHienThi) {
-        int dong = tblCongNo.convertRowIndexToModel(dongHienThi);
-        String maKH = String.valueOf(modelCongNo.getValueAt(dong, 0));
-        new DlgChiTietCongNo(maKH).setVisible(true);
-    }
-
-    // DỮ LIỆU DANH SÁCH CÔNG NỢ
-    private Connection layKetNoi() throws SQLException {
-        ConnectDB.getInstance().connect();
-        return ConnectDB.getConnection();
-    }
-
-    private void taiDuLieu() {
+    public void hienThiDanhSach(List<CongNo> dsCongNo) {
         modelCongNo.setRowCount(0);
-
-        String tuKhoa = txtTimKiem.getText().trim();
-        String like = "%" + tuKhoa + "%";
-        String nhomNo = String.valueOf(cmbNhomKH.getSelectedItem());
-        String trangThai = String.valueOf(cmbTrangThai.getSelectedItem());
-        String thoiGian = String.valueOf(cmbThoiGian.getSelectedItem());
-
-        BigDecimal tongNo = BigDecimal.ZERO;
-        int soKHNo = 0;
-        int soHDNo = 0;
-
-        try (Connection con = layKetNoi(); PreparedStatement ps = con.prepareStatement(SQL_CONG_NO)) {
-            int i = 1;
-            ps.setString(i++, tuKhoa);
-            for (int k = 0; k < 4; k++) {
-                ps.setString(i++, like);
-            }
-            for (int k = 0; k < 3; k++) {
-                ps.setString(i++, trangThai);
-            }
-            for (int k = 0; k < 4; k++) {
-                ps.setString(i++, thoiGian);
-            }
-
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    BigDecimal no = nz(rs.getBigDecimal("tongNo"));
-                    if (!thuocKhoangNo(no, nhomNo)) {
-                        continue;
-                    }
-                    int soHD = rs.getInt("soHDNo");
-                    modelCongNo.addRow(new Object[] {
-                            rs.getString("maKH"), rs.getString("hoTen"), rs.getString("soDT"),
-                            no, soHD, no.signum() > 0 ? CON_NO : DA_TT,
-                            formatDate(rs.getTimestamp("ngayCapNhat"))
-                    });
-                    if (no.signum() > 0) {
-                        tongNo = tongNo.add(no);
-                        soKHNo++;
-                        soHDNo += soHD;
-                    }
-                }
-            }
-        } catch (SQLException ex) {
-            baoLoiCSDL(this, "Không tải được danh sách công nợ", ex);
+        for (CongNo cn : dsCongNo) {
+            KhachHang kh = cn.getKhachHang();
+            modelCongNo.addRow(new Object[] {
+                    kh.getMaKH(), kh.getHoTen(), kh.getSoDT(), cn.getTongNo(),
+                    cn.getSoHDNo(), cn.getTrangThai(), formatDate(cn.getNgayCapNhat()) });
         }
-
-        lblTongNo.setText(formatMoney(tongNo) + " đ");
-        lblSoKHNo.setText(String.valueOf(soKHNo));
-        lblSoHDNo.setText(String.valueOf(soHDNo));
-        lblTongKH.setText(String.valueOf(modelCongNo.getRowCount()));
         tblCongNo.clearSelection();
     }
 
-    // Lọc theo khoảng nợ (chỉ áp dụng cho khách còn nợ): <1tr, 1-5tr, 5-10tr,
-    // >=10tr
-    private boolean thuocKhoangNo(BigDecimal no, String nhomNo) {
-        if (TAT_CA.equals(nhomNo)) {
-            return true;
-        }
-        if (no.signum() <= 0) {
-            return false;
-        }
-        BigDecimal mot = new BigDecimal("1000000");
-        BigDecimal nam = mot.multiply(BigDecimal.valueOf(5));
-        BigDecimal muoi = mot.multiply(BigDecimal.TEN);
-        switch (nhomNo) {
-            case "Dưới 1 triệu":
-                return no.compareTo(mot) < 0;
-            case "1 - 5 triệu":
-                return no.compareTo(mot) >= 0 && no.compareTo(nam) < 0;
-            case "5 - 10 triệu":
-                return no.compareTo(nam) >= 0 && no.compareTo(muoi) < 0;
-            case "Trên 10 triệu":
-                return no.compareTo(muoi) >= 0;
-            default:
-                return true;
-        }
+    public void hienThiThongKe(BigDecimal tongNo, int soKHNo, int soHDNo, int tongKH) {
+        lblTongNo.setText(formatMoney(tongNo) + " đ");
+        lblSoKHNo.setText(String.valueOf(soKHNo));
+        lblSoHDNo.setText(String.valueOf(soHDNo));
+        lblTongKH.setText(String.valueOf(tongKH));
     }
 
     // KHUNG CHI TIẾT CÔNG NỢ
-    private class DlgChiTietCongNo extends JDialog {
-        private final String maKH;
+    public static class DlgChiTietCongNo extends JDialog {
         // Thông tin khách hàng
         private final JLabel lblMaKH = taoLblGiaTri();
         private final JLabel lblTenKH = taoLblGiaTri();
@@ -391,14 +286,14 @@ public class FrmCongNo extends JPanel {
         private final DefaultTableModel modelHoaDon = taoModel(
                 "Mã hóa đơn", "Ngày lập", "Tổng tiền", "Đã thanh toán", "Còn phải trả");
         private JTable tblHoaDon;
-        private JButton btnThanhToan;
+        private final JButton btnThanhToan = taoNutChinh("Thanh toán", BLUE);
+        private final JButton btnDong = taoNutPhu("Đóng");
         // Chặn vòng lặp giữa ô tích "Chọn tất cả" và bảng
         private boolean dangDongBo = false;
 
-        DlgChiTietCongNo(String maKH) {
-            super(SwingUtilities.getWindowAncestor(FrmCongNo.this),
+        public DlgChiTietCongNo(Component cha) {
+            super(SwingUtilities.getWindowAncestor(cha),
                     "Chi tiết công nợ", Dialog.ModalityType.APPLICATION_MODAL);
-            this.maKH = maKH;
 
             setLayout(new BorderLayout());
             getContentPane().setBackground(BG);
@@ -408,10 +303,7 @@ public class FrmCongNo extends JPanel {
 
             setMinimumSize(new Dimension(720, 500));
             setSize(800, 580);
-            setLocationRelativeTo(FrmCongNo.this);
-
-            napThongTinKH();
-            napHoaDonNo();
+            setLocationRelativeTo(cha);
         }
 
         // Dựng giao diện
@@ -486,22 +378,6 @@ public class FrmCongNo extends JPanel {
             tblHoaDon.getColumnModel().getColumn(3).setCellRenderer(new MoneyRenderer(false));
             tblHoaDon.getColumnModel().getColumn(4).setCellRenderer(new MoneyRenderer(true));
 
-            // Đổi lựa chọn -> cập nhật số tiền đã chọn
-            tblHoaDon.getSelectionModel().addListSelectionListener(e -> {
-                if (!e.getValueIsAdjusting()) {
-                    capNhatLuaChon();
-                }
-            });
-            // Bấm đúp một hóa đơn -> thanh toán
-            tblHoaDon.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    if (e.getClickCount() == 2 && tblHoaDon.rowAtPoint(e.getPoint()) >= 0) {
-                        thanhToan();
-                    }
-                }
-            });
-
             JScrollPane scrHoaDon = taoScr(tblHoaDon);
             scrHoaDon.setPreferredSize(new Dimension(500, 230));
             pnlHoaDon.add(scrHoaDon, BorderLayout.CENTER);
@@ -516,16 +392,6 @@ public class FrmCongNo extends JPanel {
             chkTatCa.setOpaque(false);
             chkTatCa.setFocusPainted(false);
             chkTatCa.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            chkTatCa.addActionListener(e -> {
-                if (dangDongBo) {
-                    return;
-                }
-                if (chkTatCa.isSelected()) {
-                    tblHoaDon.selectAll();
-                } else {
-                    tblHoaDon.clearSelection();
-                }
-            });
 
             lblDaChon.setForeground(BLUE_DARK);
             lblDaChon.setFont(font(Font.BOLD, 13));
@@ -549,12 +415,8 @@ public class FrmCongNo extends JPanel {
         }
 
         private JPanel dungNut() {
-            btnThanhToan = taoNutChinh("Thanh toán", BLUE);
-            JButton btnDong = taoNutPhu("Đóng");
             btnThanhToan.setPreferredSize(new Dimension(130, 34));
             btnDong.setPreferredSize(new Dimension(90, 34));
-            btnThanhToan.addActionListener(e -> thanhToan());
-            btnDong.addActionListener(e -> dispose());
 
             JPanel pnlNut = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
             pnlNut.setBackground(Color.WHITE);
@@ -564,40 +426,50 @@ public class FrmCongNo extends JPanel {
             return pnlNut;
         }
 
-        // Nạp dữ liệu
-        private void napThongTinKH() {
-            try (Connection con = layKetNoi(); PreparedStatement ps = con.prepareStatement(SQL_KHACH_HANG)) {
-                ps.setString(1, maKH);
-                try (ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
-                        lblMaKH.setText(safe(rs.getString("maKH")));
-                        lblTenKH.setText(safe(rs.getString("hoTen")));
-                        lblSDT.setText(safe(rs.getString("soDT")));
-                        lblDiaChi.setText(safe(rs.getString("diaChi")));
-                    }
-                }
-            } catch (SQLException ex) {
-                baoLoiCSDL(this, "Không tải được thông tin khách hàng", ex);
-            }
+        // Truy cập cho controller
+        public JTable getTblHoaDon() {
+            return tblHoaDon;
         }
 
-        private void napHoaDonNo() {
+        public DefaultTableModel getModelHoaDon() {
+            return modelHoaDon;
+        }
+
+        public JCheckBox getChkTatCa() {
+            return chkTatCa;
+        }
+
+        public JButton getBtnThanhToan() {
+            return btnThanhToan;
+        }
+
+        public JButton getBtnDong() {
+            return btnDong;
+        }
+
+        public boolean isDangDongBo() {
+            return dangDongBo;
+        }
+
+        // Hiển thị dữ liệu
+        public void hienThiKhachHang(KhachHang kh) {
+            if (kh == null) {
+                return;
+            }
+            lblMaKH.setText(safe(kh.getMaKH()));
+            lblTenKH.setText(safe(kh.getHoTen()));
+            lblSDT.setText(safe(kh.getSoDT()));
+            lblDiaChi.setText(safe(kh.getDiaChi()));
+        }
+
+        public void hienThiHoaDonNo(List<CongNo.HoaDonNo> dsHoaDon) {
             modelHoaDon.setRowCount(0);
             BigDecimal tongNo = BigDecimal.ZERO;
-
-            try (Connection con = layKetNoi(); PreparedStatement ps = con.prepareStatement(SQL_HOA_DON_NO)) {
-                ps.setString(1, maKH);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        BigDecimal conNo = nz(rs.getBigDecimal("conPhaiTra"));
-                        tongNo = tongNo.add(conNo);
-                        modelHoaDon.addRow(new Object[] {
-                                rs.getString("maHoaDon"), formatDate(rs.getTimestamp("ngayLap")),
-                                nz(rs.getBigDecimal("soTien")), nz(rs.getBigDecimal("daTra")), conNo });
-                    }
-                }
-            } catch (SQLException ex) {
-                baoLoiCSDL(this, "Không tải được hóa đơn còn nợ", ex);
+            for (CongNo.HoaDonNo hd : dsHoaDon) {
+                tongNo = tongNo.add(hd.getConPhaiTra());
+                modelHoaDon.addRow(new Object[] {
+                        hd.getMaHoaDon(), formatDate(hd.getNgayLap()),
+                        hd.getSoTien(), hd.getDaTra(), hd.getConPhaiTra() });
             }
 
             int soHD = modelHoaDon.getRowCount();
@@ -610,7 +482,7 @@ public class FrmCongNo extends JPanel {
         }
 
         // Cập nhật số tiền đã chọn và đồng bộ ô tích "Chọn tất cả" theo bảng
-        private void capNhatLuaChon() {
+        public void capNhatLuaChon() {
             dangDongBo = true;
             int[] dsDong = tblHoaDon.getSelectedRows();
             BigDecimal tong = BigDecimal.ZERO;
@@ -620,36 +492,6 @@ public class FrmCongNo extends JPanel {
             lblDaChon.setText(formatMoney(tong) + " đ");
             chkTatCa.setSelected(modelHoaDon.getRowCount() > 0 && dsDong.length == modelHoaDon.getRowCount());
             dangDongBo = false;
-        }
-
-        // Thanh toán
-        private void thanhToan() {
-            int[] dsDong = tblHoaDon.getSelectedRows();
-            if (dsDong.length == 0) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chọn hóa đơn cần thanh toán.");
-                return;
-            }
-            // Chỉ chuyển sang FrmThanhToan khi chọn đúng 1 hóa đơn
-            if (dsDong.length > 1) {
-                JOptionPane.showMessageDialog(this, "Vui lòng chỉ chọn một hóa đơn để thanh toán.");
-                return;
-            }
-
-            int dong = tblHoaDon.convertRowIndexToModel(dsDong[0]);
-            String maHD = String.valueOf(modelHoaDon.getValueAt(dong, 0));
-
-            // Đóng khung chi tiết, mở màn hình thanh toán; đóng xong thì tải lại danh sách
-            // công nợ
-            dispose();
-            FrmThanhToan winThanhToan = new FrmThanhToan(maHD);
-            winThanhToan.setLocationRelativeTo(FrmCongNo.this);
-            winThanhToan.addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosed(WindowEvent e) {
-                    taiDuLieu();
-                }
-            });
-            winThanhToan.setVisible(true);
         }
     }
 
@@ -790,27 +632,23 @@ public class FrmCongNo extends JPanel {
     }
 
     // TIỆN ÍCH DỮ LIỆU
-    private static BigDecimal nz(BigDecimal so) {
-        return so == null ? BigDecimal.ZERO : so;
-    }
-
     private static String safe(String chu) {
         return chu == null || chu.trim().isEmpty() ? "-" : chu;
     }
 
     private static String formatMoney(BigDecimal so) {
-        return MONEY.format(nz(so));
+        return MONEY.format(so == null ? BigDecimal.ZERO : so);
     }
 
-    private static String formatDate(Timestamp thoiGian) {
-        return thoiGian == null ? "-" : thoiGian.toLocalDateTime().format(DMY);
+    private static String formatDate(LocalDateTime thoiGian) {
+        return thoiGian == null ? "-" : thoiGian.format(DMY);
     }
 
-    private void baoLoiCSDL(Component cha, String tieuDe, SQLException ex) {
+    public static void baoLoiCSDL(Component cha, String tieuDe, SQLException ex) {
         ex.printStackTrace();
         JOptionPane.showMessageDialog(cha,
                 tieuDe + ".\nChi tiết: " + ex.getMessage()
-                        + "\n\nHãy kiểm tra tên bảng/cột trong phần SQL của FrmCongNo.",
+                        + "\n\nHãy kiểm tra tên bảng/cột trong phần SQL của CongNoDao.",
                 "Lỗi cơ sở dữ liệu", JOptionPane.ERROR_MESSAGE);
     }
 
@@ -847,7 +685,7 @@ public class FrmCongNo extends JPanel {
             super.getTableCellRendererComponent(tbl, giaTri, dangChon, coFocus, dong, cot);
             setHorizontalAlignment(SwingConstants.CENTER);
             setFont(tbl.getFont().deriveFont(Font.BOLD));
-            setForeground(CON_NO.equals(giaTri) ? RED : GREEN);
+            setForeground(CongNo.CON_NO.equals(giaTri) ? RED : GREEN);
             return this;
         }
     }
@@ -858,13 +696,13 @@ public class FrmCongNo extends JPanel {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception ignored) {
             }
-            JFrame frmCongNo = new JFrame("QUẢN LÝ CÔNG NỢ");
-            frmCongNo.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-            frmCongNo.setMinimumSize(new Dimension(1050, 680));
-            frmCongNo.setSize(1250, 780);
-            frmCongNo.setLocationRelativeTo(null);
-            frmCongNo.setContentPane(new FrmCongNo());
-            frmCongNo.setVisible(true);
+            JFrame winCongNo = new JFrame("QUẢN LÝ CÔNG NỢ");
+            winCongNo.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            winCongNo.setMinimumSize(new Dimension(1050, 680));
+            winCongNo.setSize(1250, 780);
+            winCongNo.setLocationRelativeTo(null);
+            winCongNo.setContentPane(new FrmCongNo());
+            winCongNo.setVisible(true);
         });
     }
 }
