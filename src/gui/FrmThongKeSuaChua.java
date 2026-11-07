@@ -10,11 +10,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridLayout;
 import java.awt.Font;
-import java.awt.Point;
 import java.awt.RenderingHints;
-import java.awt.event.MouseWheelEvent;
 import java.math.BigDecimal;
-import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -31,10 +28,10 @@ import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.SwingConstants;
 
-import dao.BaoCaoSuaChuaDAO;
 import dao.BaoCaoSuaChuaDAO.ThongKeBieuDo;
 import dao.BaoCaoSuaChuaDAO.ThongKeSuDung;
 import dao.BaoCaoSuaChuaDAO.ThongKeTongQuan;
+import controller.ThongKeSuaChuaController;
 
 public class FrmThongKeSuaChua extends JPanel {
     private final AppTextField txtTuNgay = new AppTextField(12);
@@ -54,7 +51,7 @@ public class FrmThongKeSuaChua extends JPanel {
     private final AppLabel lblTrangThai = new AppLabel(
             "Chọn điều kiện rồi nhấn Thống kê", AppLabel.Style.MUTED);
 
-    private final BaoCaoSuaChuaDAO baoCaoSuaChuaDao = new BaoCaoSuaChuaDAO();
+    private final ThongKeSuaChuaController controller = new ThongKeSuaChuaController(this);
     private static final DateTimeFormatter DINH_DANG_NGAY = DateTimeFormatter.ISO_LOCAL_DATE;
 
     public FrmThongKeSuaChua() {
@@ -73,7 +70,6 @@ public class FrmThongKeSuaChua extends JPanel {
         txtDenNgay.setText(homNay.toString());
         txtTuNgay.setToolTipText("Định dạng ngày: yyyy-MM-dd");
         txtDenNgay.setToolTipText("Định dạng ngày: yyyy-MM-dd");
-        ganSuKien();
         JPanel pnlContent = new JPanel(new BorderLayout(0, 14));
         pnlContent.setOpaque(false);
         pnlContent.add(createFilterCard(), BorderLayout.NORTH);
@@ -99,61 +95,13 @@ public class FrmThongKeSuaChua extends JPanel {
         scrNoiDung.getViewport().setOpaque(false);
         scrNoiDung.setHorizontalScrollBarPolicy(
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrNoiDung.setVerticalScrollBarPolicy(
-                JScrollPane.VERTICAL_SCROLLBAR_NEVER);
-        scrNoiDung.setWheelScrollingEnabled(false);
-        scrNoiDung.addMouseWheelListener(event -> cuonNhanh(scrNoiDung, event));
-        scrNoiDung.getViewport().addMouseWheelListener(
-                event -> cuonNhanh(scrNoiDung, event));
+        scrNoiDung.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrNoiDung.getVerticalScrollBar().setUnitIncrement(16);
         add(FormUI.createPage("THỐNG KÊ SỬA CHỮA",
                 "Theo dõi tình trạng phiếu sửa chữa, doanh thu và hiệu suất xử lý",
                 scrNoiDung), BorderLayout.CENTER);
         add(lblTrangThai, BorderLayout.SOUTH);
-        thongKe();
-    }
-
-    private void cuonNhanh(JScrollPane scrNoiDung, MouseWheelEvent event) {
-        event.consume();
-        Point viTriHienTai = scrNoiDung.getViewport().getViewPosition();
-        int doCaoNoiDung = scrNoiDung.getViewport().getView().getHeight();
-        int doCaoKhungNhin = scrNoiDung.getViewport().getHeight();
-        int buocCuon = event.getUnitsToScroll() * 36;
-        int viTriMoi = Math.max(0, Math.min(
-                viTriHienTai.y + buocCuon,
-                Math.max(0, doCaoNoiDung - doCaoKhungNhin)));
-        scrNoiDung.getViewport().setViewPosition(
-                new Point(viTriHienTai.x, viTriMoi));
-    }
-
-    private void ganSuKien() {
-        btnThongKe.addActionListener(event -> thongKe());
-        btnLamMoi.addActionListener(event -> lamMoi());
-    }
-
-    private void thongKe() {
-        try {
-            LocalDate tuNgay = docNgay(txtTuNgay.getText(), "Từ ngày");
-            LocalDate denNgay = docNgay(txtDenNgay.getText(), "Đến ngày");
-            if (denNgay.isBefore(tuNgay)) {
-                throw new IllegalArgumentException("Đến ngày phải bằng hoặc sau Từ ngày.");
-            }
-
-            ThongKeTongQuan tongQuan = baoCaoSuaChuaDao.layTongQuan(
-                    tuNgay, denNgay, null, null);
-
-            capNhatTongQuan(tongQuan);
-            String kySuDung = (String) cboKySuDung.getSelectedItem();
-            capNhatBangHot(pnlDichVuHot, baoCaoSuaChuaDao.layTopSuDung(
-                    denNgay, kySuDung, "Dịch vụ", null, null));
-            capNhatBangHot(pnlPhuTungHot, baoCaoSuaChuaDao.layTopSuDung(
-                    denNgay, kySuDung, "Phụ tùng", null, null));
-            capNhatBieuDo(denNgay, null, null);
-            lblTrangThai.setText("Đã cập nhật thống kê.");
-        } catch (DateTimeParseException | IllegalArgumentException exception) {
-            hienThiLoi(exception.getMessage());
-        } catch (Exception exception) {
-            hienThiLoi("Không thể tải thống kê sửa chữa: " + exception.getMessage());
-        }
+        controller.khoiTao();
     }
 
     private LocalDate docNgay(String giaTri, String tenTruong) {
@@ -166,20 +114,19 @@ public class FrmThongKeSuaChua extends JPanel {
         }
     }
 
-    private void capNhatTongQuan(ThongKeTongQuan tongQuan) {
+    public void capNhatTongQuan(ThongKeTongQuan tongQuan) {
         lblTongPhieu.setText(String.valueOf(tongQuan.tongPhieu()));
         lblDaHoanThanh.setText(String.valueOf(tongQuan.daHoanThanh()));
         lblDangXuLy.setText(String.valueOf(tongQuan.dangXuLy()));
         lblDoanhThu.setText(dinhDangTien(tongQuan.doanhThu()));
     }
 
-    private void capNhatBangHot(BangHot bangHot, List<ThongKeSuDung> danhSach) {
-        bangHot.setData(danhSach);
+    public void capNhatBangHot(List<ThongKeSuDung> dichVuHot, List<ThongKeSuDung> phuTungHot) {
+        pnlDichVuHot.setData(dichVuHot);
+        pnlPhuTungHot.setData(phuTungHot);
     }
 
-    private void capNhatBieuDo(LocalDate denNgay, String trangThai, String maNV) throws SQLException {
-        List<ThongKeBieuDo> danhSach = baoCaoSuaChuaDao.layTheoBieuDo(
-                denNgay, (String) cboKyBieuDo.getSelectedItem(), trangThai, maNV);
+    public void capNhatBieuDo(List<ThongKeBieuDo> danhSach) {
         String[] nhan = new String[danhSach.size()];
         double[] giaTri = new double[danhSach.size()];
         for (int i = 0; i < danhSach.size(); i++) {
@@ -189,11 +136,12 @@ public class FrmThongKeSuaChua extends JPanel {
         pnlBieuDoTheoThang.setData(nhan, giaTri);
     }
 
-    private void lamMoi() {
+    public void lamMoiBieuMau() {
         LocalDate homNay = LocalDate.now();
         txtTuNgay.setText(homNay.withDayOfMonth(1).toString());
         txtDenNgay.setText(homNay.toString());
-        cboKySuDung.setSelectedIndex(0);
+        cboKySuDung.setSelectedItem("Tháng");
+        cboKyBieuDo.setSelectedIndex(0);
         lblTongPhieu.setText("—");
         lblDaHoanThanh.setText("—");
         lblDangXuLy.setText("—");
@@ -208,9 +156,37 @@ public class FrmThongKeSuaChua extends JPanel {
         return giaTri == null ? "0 VNĐ" : String.format("%,.0f VNĐ", giaTri);
     }
 
-    private void hienThiLoi(String thongBao) {
+    public void hienThiLoi(String thongBao) {
         JOptionPane.showMessageDialog(this, thongBao, "Lỗi", JOptionPane.ERROR_MESSAGE);
         lblTrangThai.setText("Có lỗi khi xử lý thống kê.");
+    }
+
+    public AppButton layNutThongKe() {
+        return btnThongKe;
+    }
+
+    public AppButton layNutLamMoi() {
+        return btnLamMoi;
+    }
+
+    public LocalDate layTuNgay() {
+        return docNgay(txtTuNgay.getText(), "Từ ngày");
+    }
+
+    public LocalDate layDenNgay() {
+        return docNgay(txtDenNgay.getText(), "Đến ngày");
+    }
+
+    public String layKySuDung() {
+        return (String) cboKySuDung.getSelectedItem();
+    }
+
+    public String layKyBieuDo() {
+        return (String) cboKyBieuDo.getSelectedItem();
+    }
+
+    public void thongBao(String message) {
+        lblTrangThai.setText(message);
     }
 
     private JPanel createFilterCard() {
