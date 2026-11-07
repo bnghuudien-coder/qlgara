@@ -1,35 +1,25 @@
 package gui;
 
-import connectDB.ConnectDB;
+import controller.ThongKeDoanhThuController;
+import controller.ThongKeDoanhThuController.DuLieuBieuDo;
+import controller.ThongKeDoanhThuController.KetQuaThongKe;
+import entity.HoaDon;
+import entity.KhachHang;
+import entity.NhanVien;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.text.Normalizer;
 import java.text.NumberFormat;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import javax.swing.*;
 import javax.swing.border.*;
 import javax.swing.event.DocumentEvent;
@@ -38,7 +28,13 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
+import static controller.ThongKeDoanhThuController.*;
 
+/**
+ * Giao diện Thống kê doanh thu. Mọi xử lý dữ liệu nằm ở
+ * ThongKeDoanhThuController (và ThongKeDoanhThuDAO), lớp này chỉ dựng giao diện
+ * và hiển thị kết quả.
+ */
 public class FrmThongKeDoanhThu extends JPanel {
     private static final Color BG = new Color(244, 249, 255);
     private static final Color BLUE = new Color(35, 128, 238);
@@ -58,125 +54,14 @@ public class FrmThongKeDoanhThu extends JPanel {
     // Định dạng
     private static final DateTimeFormatter DMY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter HM = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter GIO_NGAY = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
     private static final NumberFormat MONEY = NumberFormat.getNumberInstance(Locale.forLanguageTag("vi-VN"));
-    // Chế độ thống kê
-    private static final int CHE_DO_NGAY = 0;
-    private static final int CHE_DO_THANG = 1;
-    private static final int CHE_DO_NAM = 2;
-    // Phạm vi thống kê
-    private static final int PHAM_VI_TAT_CA = 0;
-    private static final int PHAM_VI_NHAN_VIEN = 1;
-    private static final int PHAM_VI_KHACH_HANG = 2;
     // Tên thẻ trong khung bộ lọc
     private static final String THE_NV = "NV";
     private static final String THE_KH = "KH";
-    // Tiêu đề cột bảng danh sách ở chế độ ngày
-    private static final String[] COT_NGAY = { "Mã hóa đơn", "Nhân viên", "Khách hàng", "Biển số xe",
-            "Tổng tiền hóa đơn", "Còn nợ", "Trạng thái thanh toán" };
-    // Câu lệnh SQL
-    // Nhân viên có lập hóa đơn
-    private static final String SQL_NHAN_VIEN = "SELECT DISTINCT nv.maNV, nv.hoTen " +
-            "FROM NhanVien nv " +
-            "INNER JOIN HoaDon hd ON nv.maNV = hd.maNV " +
-            "WHERE nv.maNV IS NOT NULL " +
-            "ORDER BY nv.maNV";
-    // Danh sách khách hàng
-    private static final String SQL_KHACH_HANG = "SELECT maKH, hoTen, soDT FROM KhachHang ORDER BY maKH";
-    // Hóa đơn kèm khách hàng và tổng tiền đã thu thành công
-    private static final String SQL_HOA_DON = "SELECT hd.maHoaDon, hd.ngayLap, hd.maNV, " +
-            "       hd.soTien, " +
-            "       psc.maKH AS maKH, " +
-            "       kh.hoTen AS tenKhachHang, " +
-            "       kh.soDT AS soDT, " +
-            "       COALESCE(tt.tongDaThu, 0) AS tongDaThu " +
-            "FROM HoaDon hd " +
-            "LEFT JOIN PhieuSuaChua psc " +
-            "       ON hd.maPhieuSuaChua = psc.maPhieuSuaChua " +
-            "LEFT JOIN KhachHang kh " +
-            "       ON psc.maKH = kh.maKH " +
-            "LEFT JOIN ( " +
-            "    SELECT gd.maHoaDon, " +
-            "           SUM(gd.soTienThanhToan) AS tongDaThu " +
-            "    FROM GiaoDichThanhToan gd " +
-            "    WHERE gd.trangThaiGD = N'Thành công' " +
-            "    GROUP BY gd.maHoaDon " +
-            ") tt ON hd.maHoaDon = tt.maHoaDon " +
-            "ORDER BY hd.ngayLap DESC";
-    // Lịch sử giao dịch của một hóa đơn
-    private static final String SQL_GIAO_DICH = "SELECT thoiGianGD, phuongThucThanhToan, soTienThanhToan, trangThaiGD "
-            + "FROM GiaoDichThanhToan WHERE maHoaDon = ? ORDER BY thoiGianGD";
 
-    // LỚP DỮ LIỆU
-    private static class NhanVien {
-        final String ma, ten;
-
-        NhanVien(String ma, String ten) {
-            this.ma = ma;
-            this.ten = ten;
-        }
-    }
-
-    private static class KhachHang {
-        final String ma, ten, sdt;
-
-        KhachHang(String ma, String ten, String sdt) {
-            this.ma = ma;
-            this.ten = ten;
-            this.sdt = sdt;
-        }
-    }
-
-    private static class HoaDon {
-        final String ma, maNV, maKH, khachHang, sdt, bienSo;
-        final LocalDate ngay;
-        final LocalTime gio;
-        final long tong, daThu;
-
-        HoaDon(String ma, LocalDate ngay, LocalTime gio, String maNV, String maKH, String khachHang,
-                String sdt, String bienSo, long tong, long daThu) {
-            this.ma = ma;
-            this.ngay = ngay;
-            this.gio = gio;
-            this.maNV = maNV;
-            this.maKH = maKH;
-            this.khachHang = khachHang;
-            this.sdt = sdt;
-            this.bienSo = bienSo;
-            this.tong = tong;
-            this.daThu = daThu;
-        }
-
-        // Số còn nợ của hóa đơn
-        long conPhaiThu() {
-            return Math.max(0L, tong - daThu);
-        }
-
-        String trangThai() {
-            if (daThu <= 0) {
-                return "Chưa thanh toán";
-            }
-            if (daThu < tong) {
-                return "Thanh toán một phần";
-            }
-            return "Đã thanh toán";
-        }
-    }
-
-    private static class GiaoDich {
-        String thoiGian, phuongThuc, trangThai;
-        long soTien;
-    }
-
-    // DỮ LIỆU VÀ TRẠNG THÁI
-    private final Map<String, NhanVien> dsNhanVien = new LinkedHashMap<>();
-    private final Map<String, KhachHang> dsKhachHang = new LinkedHashMap<>();
-    private final List<HoaDon> dsHoaDon = new ArrayList<>();
-
-    // Dòng đang hiển thị trên bảng danh sách (để mở chi tiết / đi sâu xuống ngày,
-    // tháng)
-    private final List<HoaDon> dongHoaDon = new ArrayList<>();
-    private final List<LocalDate> dongKhoa = new ArrayList<>();
+    // CONTROLLER VÀ TRẠNG THÁI
+    private final ThongKeDoanhThuController controller = new ThongKeDoanhThuController();
+    private KetQuaThongKe ketQua; // kết quả thống kê đang hiển thị (để mở chi tiết / đi sâu xuống ngày, tháng)
 
     private int cheDo = CHE_DO_NGAY;
     private int cheDoCuoi = -1; // chế độ của lần dựng cột gần nhất
@@ -215,7 +100,7 @@ public class FrmThongKeDoanhThu extends JPanel {
         setLayout(new BorderLayout());
 
         try {
-            taiDuLieu();
+            controller.taiDuLieu();
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this,
                     "Không thể tải dữ liệu hóa đơn từ CSDL:\n" + ex.getMessage(),
@@ -232,77 +117,6 @@ public class FrmThongKeDoanhThu extends JPanel {
         dongBoSoNgay();
         sanSang = true;
         lamMoiThongKe();
-    }
-
-    // TẢI DỮ LIỆU TỪ SQL SERVER
-    private void taiDuLieu() throws SQLException {
-        dsNhanVien.clear();
-        dsKhachHang.clear();
-        dsHoaDon.clear();
-
-        ConnectDB.getInstance().connect();
-        Connection con = ConnectDB.getConnection();
-        if (con == null) {
-            throw new SQLException("Không thể kết nối SQL Server.");
-        }
-
-        // 1. Nhân viên có lập hóa đơn
-        try (PreparedStatement ps = con.prepareStatement(SQL_NHAN_VIEN);
-                ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                String ma = rs.getString("maNV");
-                String ten = rs.getString("hoTen");
-
-                dsNhanVien.put(ma, new NhanVien(
-                        ma,
-                        ten == null ? "" : ten));
-            }
-        }
-
-        // 2. Danh sách khách hàng
-        try (PreparedStatement ps = con.prepareStatement(SQL_KHACH_HANG); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                String ma = rs.getString("maKH");
-                String sdt = rs.getString("soDT");
-                dsKhachHang.put(ma, new KhachHang(ma, rs.getString("hoTen"), sdt == null ? "" : sdt));
-            }
-        }
-
-        // 3. Hóa đơn, khách hàng và số tiền đã thu
-        try (PreparedStatement ps = con.prepareStatement(SQL_HOA_DON); ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                Timestamp ngayLap = rs.getTimestamp("ngayLap");
-                if (ngayLap == null) {
-                    continue;
-                }
-                LocalDateTime thoiGian = ngayLap.toLocalDateTime();
-                String tenKH = rs.getString("tenKhachHang");
-                String sdt = rs.getString("soDT");
-                long tong = laySo(rs.getBigDecimal("soTien"));
-                long daThu = Math.max(0L, Math.min(laySo(rs.getBigDecimal("tongDaThu")), tong));
-
-                dsHoaDon.add(new HoaDon(
-                        rs.getString("maHoaDon"),
-                        thoiGian.toLocalDate(),
-                        thoiGian.toLocalTime(),
-                        rs.getString("maNV"),
-                        rs.getString("maKH"),
-                        tenKH == null ? "Chưa có thông tin khách hàng" : tenKH,
-                        sdt == null ? "" : sdt,
-                        "Chưa xác định",
-                        tong, daThu));
-            }
-        }
-    }
-
-    private static long laySo(BigDecimal so) {
-        return so == null ? 0L : so.longValue();
-    }
-
-    private String tenNhanVien(String ma) {
-        NhanVien nv = dsNhanVien.get(ma);
-        return nv == null ? ma : nv.ten;
     }
 
     // DỰNG GIAO DIỆN CHÍNH
@@ -498,7 +312,7 @@ public class FrmThongKeDoanhThu extends JPanel {
         return pnlThe;
     }
 
-    // Thẻ tìm kiếm + danh sách khách hàng (từ phần công nợ)
+    // Thẻ tìm kiếm + danh sách khách hàng
     private JPanel dungTheKhachHang() {
         JPanel pnlThe = new JPanel(new BorderLayout());
         pnlThe.setOpaque(false);
@@ -790,22 +604,17 @@ public class FrmThongKeDoanhThu extends JPanel {
 
     // Danh sách nhân viên kèm số hóa đơn đã lập
     private void napBangNhanVien() {
-        Map<String, Integer> soHoaDon = new HashMap<>();
-        for (HoaDon hd : dsHoaDon) {
-            if (hd.maNV != null) {
-                soHoaDon.merge(hd.maNV, 1, Integer::sum);
-            }
-        }
+        Map<String, Integer> soHoaDon = controller.demHoaDonTheoNhanVien();
         modelNhanVien.setRowCount(0);
-        for (NhanVien nv : dsNhanVien.values()) {
-            modelNhanVien.addRow(new Object[] { nv.ma, nv.ten, soHoaDon.getOrDefault(nv.ma, 0) });
+        for (NhanVien nv : controller.getDanhSachNhanVien()) {
+            modelNhanVien.addRow(new Object[] { nv.getMaNV(), nv.getHoTen(), soHoaDon.getOrDefault(nv.getMaNV(), 0) });
         }
     }
 
     private void napBangKhachHang() {
         modelKhachHang.setRowCount(0);
-        for (KhachHang kh : dsKhachHang.values()) {
-            modelKhachHang.addRow(new Object[] { kh.ma, kh.ten, kh.sdt });
+        for (KhachHang kh : controller.getDanhSachKhachHang()) {
+            modelKhachHang.addRow(new Object[] { kh.getMaKH(), kh.getHoTen(), kh.getSoDT() });
         }
     }
 
@@ -917,8 +726,8 @@ public class FrmThongKeDoanhThu extends JPanel {
         return modelKhachHang.getValueAt(tblKhachHang.convertRowIndexToModel(dong), 0).toString();
     }
 
-    // THỐNG KÊ
-    // Tính lại toàn bộ: tổng, công nợ, danh sách, biểu đồ
+    // HIỂN THỊ THỐNG KÊ
+    // Lấy kết quả từ controller rồi đổ lên: tổng, công nợ, danh sách, biểu đồ
     private void lamMoiThongKe() {
         if (!sanSang) {
             return;
@@ -928,90 +737,54 @@ public class FrmThongKeDoanhThu extends JPanel {
         YearMonth ym = YearMonth.of(nam, thang);
         int ngay = Math.min(layGiaTri(cmbNgay, 1), ym.lengthOfMonth());
 
-        // 1. Kỳ thống kê và tiêu đề
-        LocalDate batDau, ketThuc;
+        // 1. Tiêu đề theo kỳ thống kê
         String tieuDeDS, tieuDeBD;
         if (cheDo == CHE_DO_NGAY) {
-            batDau = ketThuc = ym.atDay(ngay);
-            tieuDeDS = "DANH SÁCH HÓA ĐƠN (" + batDau.format(DMY) + ")";
+            tieuDeDS = "DANH SÁCH HÓA ĐƠN (" + ym.atDay(ngay).format(DMY) + ")";
             tieuDeBD = "";
         } else if (cheDo == CHE_DO_THANG) {
-            batDau = ym.atDay(1);
-            ketThuc = ym.atEndOfMonth();
             String ky = String.format("%02d/%d", thang, nam);
             tieuDeDS = "THỐNG KÊ THÁNG " + ky;
             tieuDeBD = "BIỂU ĐỒ DOANH THU VÀ CÔNG NỢ THEO THÁNG " + ky;
         } else {
-            batDau = LocalDate.of(nam, 1, 1);
-            ketThuc = LocalDate.of(nam, 12, 31);
             tieuDeDS = "THỐNG KÊ THEO NĂM " + nam;
             tieuDeBD = "BIỂU ĐỒ DOANH THU VÀ CÔNG NỢ THEO NĂM " + nam;
         }
         lblTieuDeDanhSach.setText(tieuDeDS);
         lblTieuDeBieuDo.setText(tieuDeBD);
 
-        // 2. Phạm vi nhân viên / khách hàng
+        // 2. Nhờ controller tính
         int phamVi = cmbPhamVi.getSelectedIndex();
         String maNV = phamVi == PHAM_VI_NHAN_VIEN ? maNhanVienDangChon() : null;
         String maKH = phamVi == PHAM_VI_KHACH_HANG ? maKhachHangDangChon() : null;
-        List<HoaDon> dsLoc = new ArrayList<>();
-        for (HoaDon hd : dsHoaDon) {
-            boolean hopLe;
-            if (phamVi == PHAM_VI_NHAN_VIEN) {
-                hopLe = maNV != null && maNV.equals(hd.maNV);
-            } else if (phamVi == PHAM_VI_KHACH_HANG) {
-                hopLe = maKH != null && maKH.equals(hd.maKH);
-            } else {
-                hopLe = true;
-            }
-            if (hopLe) {
-                dsLoc.add(hd);
-            }
-        }
+        ketQua = controller.tinhThongKe(cheDo, nam, thang, ngay, phamVi, maNV, maKH);
 
-        // 3. Công nợ: còn nợ của hóa đơn lập trong kỳ, và lũy kế đến cuối kỳ
-        long noTrongKy = 0, noLuyKe = 0;
-        for (HoaDon hd : dsLoc) {
-            if (!hd.ngay.isBefore(batDau) && !hd.ngay.isAfter(ketThuc)) {
-                noTrongKy += hd.conPhaiThu();
-            }
-            if (!hd.ngay.isAfter(ketThuc)) {
-                noLuyKe += hd.conPhaiThu();
-            }
-        }
-        lblNoTrongKy.setText(formatTien(noTrongKy));
-        lblNoLuyKe.setText(formatTien(noLuyKe));
+        // 3. Công nợ và tổng
+        lblNoTrongKy.setText(formatTien(ketQua.noTrongKy));
+        lblNoLuyKe.setText(formatTien(ketQua.noLuyKe));
+        lblTongSoHoaDon.setText(String.valueOf(ketQua.soHoaDon));
+        lblTongTienHoaDon.setText(formatTien(ketQua.tongTien));
 
         // 4. Danh sách
-        dongHoaDon.clear();
-        dongKhoa.clear();
         modelThongKe.setRowCount(0);
         if (cheDoCuoi != cheDo) {
-            modelThongKe.setColumnIdentifiers(layTieuDeCot());
+            modelThongKe.setColumnIdentifiers(ketQua.tieuDeCot);
             cheDoCuoi = cheDo;
         }
         if (cheDo != CHE_DO_NGAY) {
             thuNganCot();
         }
-        long[] ketQua = cheDo == CHE_DO_NGAY ? napBangNgay(dsLoc, batDau) : napBangNhom(dsLoc, batDau, ketThuc);
-
-        lblTongSoHoaDon.setText(String.valueOf(ketQua[0]));
-        lblTongTienHoaDon.setText(formatTien(ketQua[1]));
+        for (Object[] dong : ketQua.dong) {
+            modelThongKe.addRow(dong);
+        }
         capNhatGhiChu(phamVi, maNV, maKH);
 
         // 5. Bố cục các cột và biểu đồ
         capNhatBoCot();
-        if (cheDo != CHE_DO_NGAY) {
-            capNhatBieuDo(dsLoc, ym, nam);
+        if (ketQua.bieuDo != null) {
+            DuLieuBieuDo bd = ketQua.bieuDo;
+            pnlBieuDo.napDuLieu(bd.nhan, bd.giaTri, bd.soHoaDon, bd.tenTrucX);
         }
-    }
-
-    private String[] layTieuDeCot() {
-        if (cheDo == CHE_DO_NGAY) {
-            return COT_NGAY;
-        }
-        String cotDau = cheDo == CHE_DO_THANG ? "Ngày" : "Tháng";
-        return new String[] { cotDau, "Số hóa đơn", "Tổng tiền hóa đơn", "Tổng tiền đã thu", "Tổng tiền nợ" };
     }
 
     // Thu ngắn cột Ngày/Tháng và Số hóa đơn
@@ -1020,66 +793,6 @@ public class FrmThongKeDoanhThu extends JPanel {
         tblThongKe.getColumnModel().getColumn(0).setMaxWidth(70);
         tblThongKe.getColumnModel().getColumn(1).setPreferredWidth(85);
         tblThongKe.getColumnModel().getColumn(1).setMaxWidth(90);
-    }
-
-    // Tab ngày: liệt kê từng hóa đơn trong ngày. Trả về {số hóa đơn, tổng tiền hóa
-    // đơn}
-    private long[] napBangNgay(List<HoaDon> dsLoc, LocalDate ngay) {
-        List<HoaDon> dsNgay = new ArrayList<>();
-        for (HoaDon hd : dsLoc) {
-            if (hd.ngay.equals(ngay)) {
-                dsNgay.add(hd);
-            }
-        }
-        dsNgay.sort((a, b) -> a.gio.compareTo(b.gio));
-
-        long tongTien = 0;
-        for (HoaDon hd : dsNgay) {
-            modelThongKe.addRow(new Object[] {
-                    hd.ma,
-                    tenNhanVien(hd.maNV),
-                    hd.khachHang,
-                    hd.bienSo,
-                    formatTien(hd.tong),
-                    formatTien(hd.conPhaiThu()),
-                    hd.trangThai()
-            });
-            dongHoaDon.add(hd);
-            tongTien += hd.tong;
-        }
-        return new long[] { dsNgay.size(), tongTien };
-    }
-
-    // Tab tháng / năm: gom theo ngày hoặc tháng. Trả về {số hóa đơn, tổng tiền hóa
-    // đơn}
-    private long[] napBangNhom(List<HoaDon> dsLoc, LocalDate batDau, LocalDate ketThuc) {
-        // Mỗi nhóm: {số hóa đơn, tổng tiền, tiền đã thu, còn nợ}
-        TreeMap<LocalDate, long[]> dsNhom = new TreeMap<>();
-        for (HoaDon hd : dsLoc) {
-            if (hd.ngay.isBefore(batDau) || hd.ngay.isAfter(ketThuc)) {
-                continue;
-            }
-            LocalDate khoa = cheDo == CHE_DO_THANG ? hd.ngay : hd.ngay.withDayOfMonth(1);
-            long[] nhom = dsNhom.computeIfAbsent(khoa, k -> new long[4]);
-            nhom[0]++;
-            nhom[1] += hd.tong;
-            nhom[2] += hd.daThu;
-            nhom[3] += hd.conPhaiThu();
-        }
-
-        long soHD = 0, tongTien = 0;
-        for (Map.Entry<LocalDate, long[]> muc : dsNhom.entrySet()) {
-            long[] nhom = muc.getValue();
-            String nhan = String.valueOf(cheDo == CHE_DO_THANG
-                    ? muc.getKey().getDayOfMonth()
-                    : muc.getKey().getMonthValue());
-            modelThongKe.addRow(new Object[] { nhan, nhom[0], formatTien(nhom[1]), formatTien(nhom[2]),
-                    formatTien(nhom[3]) });
-            dongKhoa.add(muc.getKey());
-            soHD += nhom[0];
-            tongTien += nhom[1];
-        }
-        return new long[] { soHD, tongTien };
     }
 
     private void capNhatGhiChu(int phamVi, String maNV, String maKH) {
@@ -1110,43 +823,6 @@ public class FrmThongKeDoanhThu extends JPanel {
         pnlCacCot.repaint();
     }
 
-    // Biểu đồ: doanh thu đã thu, công nợ trong kỳ, công nợ lũy kế theo ngày trong
-    // tháng hoặc theo tháng trong năm
-    private void capNhatBieuDo(List<HoaDon> dsLoc, YearMonth ym, int nam) {
-        boolean theoThang = cheDo == CHE_DO_THANG;
-        int soCot = theoThang ? ym.lengthOfMonth() : 12;
-        String nhanBieuDo = theoThang ? "Ngày" : "Tháng";
-
-        String[] dsNhan = new String[soCot];
-        long[] dsDoanhThu = new long[soCot];
-        long[] dsNoKy = new long[soCot];
-        long[] dsNoLuyKe = new long[soCot];
-        long[] dsSoHD = new long[soCot];
-
-        for (int i = 0; i < soCot; i++) {
-            LocalDate tu, den;
-            if (theoThang) {
-                tu = den = ym.atDay(i + 1);
-            } else {
-                YearMonth thang = YearMonth.of(nam, i + 1);
-                tu = thang.atDay(1);
-                den = thang.atEndOfMonth();
-            }
-            dsNhan[i] = String.valueOf(i + 1);
-            for (HoaDon hd : dsLoc) {
-                if (!hd.ngay.isBefore(tu) && !hd.ngay.isAfter(den)) {
-                    dsDoanhThu[i] += hd.daThu;
-                    dsNoKy[i] += hd.conPhaiThu();
-                    dsSoHD[i]++;
-                }
-                if (!hd.ngay.isAfter(den)) {
-                    dsNoLuyKe[i] += hd.conPhaiThu();
-                }
-            }
-        }
-        pnlBieuDo.napDuLieu(dsNhan, new long[][] { dsDoanhThu, dsNoKy, dsNoLuyKe }, dsSoHD, nhanBieuDo);
-    }
-
     // XEM CHI TIẾT
     // Ngày: xem chi tiết hóa đơn. Tháng/Năm: đi sâu xuống ngày/tháng được chọn
     private void xemChiTiet() {
@@ -1156,42 +832,17 @@ public class FrmThongKeDoanhThu extends JPanel {
                     "Chưa chọn dòng", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        if (ketQua == null) {
+            return;
+        }
         if (cheDo == CHE_DO_NGAY) {
-            if (dong < dongHoaDon.size()) {
-                hienChiTietHoaDon(dongHoaDon.get(dong));
+            if (dong < ketQua.dongHoaDon.size()) {
+                hienChiTietHoaDon(ketQua.dongHoaDon.get(dong));
             }
-        } else if (dong < dongKhoa.size()) {
-            datNgay(dongKhoa.get(dong));
+        } else if (dong < ketQua.dongKhoa.size()) {
+            datNgay(ketQua.dongKhoa.get(dong));
             chonTab(cheDo == CHE_DO_THANG ? CHE_DO_NGAY : CHE_DO_THANG);
         }
-    }
-
-    // Lấy lịch sử giao dịch thanh toán của một hóa đơn
-    private List<GiaoDich> taiGiaoDich(String maHoaDon) {
-        List<GiaoDich> dsGiaoDich = new ArrayList<>();
-        try {
-            ConnectDB.getInstance().connect();
-            Connection con = ConnectDB.getConnection();
-            try (PreparedStatement ps = con.prepareStatement(SQL_GIAO_DICH)) {
-                ps.setString(1, maHoaDon);
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        GiaoDich gd = new GiaoDich();
-                        Timestamp thoiGian = rs.getTimestamp("thoiGianGD");
-                        gd.thoiGian = thoiGian == null ? "-" : thoiGian.toLocalDateTime().format(GIO_NGAY);
-                        gd.phuongThuc = rs.getString("phuongThucThanhToan");
-                        gd.soTien = laySo(rs.getBigDecimal("soTienThanhToan"));
-                        gd.trangThai = rs.getString("trangThaiGD");
-                        dsGiaoDich.add(gd);
-                    }
-                }
-            }
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this,
-                    "Không thể tải lịch sử thanh toán:\n" + ex.getMessage(),
-                    "Lỗi CSDL", JOptionPane.ERROR_MESSAGE);
-        }
-        return dsGiaoDich;
     }
 
     private JPanel taoOThongTin(String nhan, String giaTri) {
@@ -1230,7 +881,12 @@ public class FrmThongKeDoanhThu extends JPanel {
     // Cửa sổ chi tiết hóa đơn: 1) Thông tin hóa đơn, 2) Thông tin thanh toán và
     // công nợ, 3) Lịch sử thanh toán, 4) Nút Đóng
     private void hienChiTietHoaDon(HoaDon hd) {
-        JDialog winChiTiet = new JDialog(SwingUtilities.getWindowAncestor(this), "Chi tiết hóa đơn - " + hd.ma,
+        String ma = hd.getMaHoaDon();
+        long tong = controller.tongTien(hd);
+        long daThu = controller.daThu(hd);
+        long conLai = controller.conPhaiThu(hd);
+
+        JDialog winChiTiet = new JDialog(SwingUtilities.getWindowAncestor(this), "Chi tiết hóa đơn - " + ma,
                 Dialog.ModalityType.APPLICATION_MODAL);
 
         // Phần 1: thông tin hóa đơn
@@ -1238,28 +894,29 @@ public class FrmThongKeDoanhThu extends JPanel {
         pnlThongTin.add(taoTieuDe("1. THÔNG TIN HÓA ĐƠN"), BorderLayout.NORTH);
         JPanel pnlLuoi = new JPanel(new GridLayout(0, 2, 24, 10));
         pnlLuoi.setOpaque(false);
-        pnlLuoi.add(taoOThongTin("Mã hóa đơn", hd.ma));
-        pnlLuoi.add(taoOThongTin("Ngày lập", hd.ngay.format(DMY) + "  " + hd.gio.format(HM)));
-        pnlLuoi.add(taoOThongTin("Nhân viên lập hóa đơn", tenNhanVien(hd.maNV)));
-        pnlLuoi.add(taoOThongTin("Khách hàng", hd.khachHang));
-        pnlLuoi.add(taoOThongTin("Số điện thoại", hd.sdt));
-        pnlLuoi.add(taoOThongTin("Biển số xe", hd.bienSo));
+        pnlLuoi.add(taoOThongTin("Mã hóa đơn", ma));
+        pnlLuoi.add(taoOThongTin("Ngày lập",
+                hd.getNgayLap().toLocalDateTime().format(DMY) + "  " + hd.getNgayLap().toLocalDateTime().format(HM)));
+        pnlLuoi.add(taoOThongTin("Nhân viên lập hóa đơn", controller.tenNhanVien(hd)));
+        pnlLuoi.add(taoOThongTin("Khách hàng", controller.tenKhachHang(hd)));
+        pnlLuoi.add(taoOThongTin("Số điện thoại", controller.soDienThoai(hd)));
+        pnlLuoi.add(taoOThongTin("Biển số xe", controller.bienSoXe(hd)));
         pnlThongTin.add(pnlLuoi, BorderLayout.CENTER);
 
         // Phần 2: thông tin thanh toán
-        Color mauTrangThai = hd.daThu <= 0 ? DEBT_RED : hd.daThu < hd.tong ? ORANGE : GREEN;
-        Color mauConLai = hd.conPhaiThu() > 0 ? DEBT_RED : GREEN;
+        Color mauTrangThai = daThu <= 0 ? DEBT_RED : daThu < tong ? ORANGE : GREEN;
+        Color mauConLai = conLai > 0 ? DEBT_RED : GREEN;
 
         JPanel pnlTien = new JPanel(new GridLayout(1, 3, 10, 0));
         pnlTien.setOpaque(false);
-        pnlTien.add(taoOTien("Tổng tiền hóa đơn", formatTien(hd.tong), DARK_BLUE));
-        pnlTien.add(taoOTien("Tổng tiền đã thu", formatTien(hd.daThu), GREEN));
-        pnlTien.add(taoOTien("Tổng tiền còn phải thu", formatTien(hd.conPhaiThu()), mauConLai));
+        pnlTien.add(taoOTien("Tổng tiền hóa đơn", formatTien(tong), DARK_BLUE));
+        pnlTien.add(taoOTien("Tổng tiền đã thu", formatTien(daThu), GREEN));
+        pnlTien.add(taoOTien("Tổng tiền còn phải thu", formatTien(conLai), mauConLai));
 
         JLabel lblNhanTrangThai = new JLabel("Trạng thái thanh toán:  ");
         lblNhanTrangThai.setFont(font(Font.PLAIN, 12));
         lblNhanTrangThai.setForeground(MUTED);
-        JLabel lblTrangThai = new JLabel(hd.trangThai());
+        JLabel lblTrangThai = new JLabel(controller.trangThai(hd));
         lblTrangThai.setFont(font(Font.BOLD, 14));
         lblTrangThai.setForeground(mauTrangThai);
         JPanel pnlTrangThai = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -1277,7 +934,7 @@ public class FrmThongKeDoanhThu extends JPanel {
         pnlThanhToan.add(pnlNoiDungTT, BorderLayout.CENTER);
 
         // Phần 3: lịch sử thanh toán
-        List<GiaoDich> dsGiaoDich = taiGiaoDich(hd.ma);
+        List<Object[]> dsGiaoDich = layLichSuThanhToan(ma);
         JPanel pnlLichSu = taoPnlThe();
         pnlLichSu.add(taoTieuDe("3. LỊCH SỬ THANH TOÁN"), BorderLayout.NORTH);
         if (dsGiaoDich.isEmpty()) {
@@ -1289,12 +946,8 @@ public class FrmThongKeDoanhThu extends JPanel {
         } else {
             DefaultTableModel modelGiaoDich = taoModel(
                     "STT", "Thời gian thanh toán", "Phương thức", "Số tiền thanh toán", "Trạng thái");
-            int stt = 1;
-            for (GiaoDich gd : dsGiaoDich) {
-                modelGiaoDich.addRow(new Object[] {
-                        String.valueOf(stt++), gd.thoiGian,
-                        gd.phuongThuc == null ? "-" : gd.phuongThuc, formatTien(gd.soTien),
-                        gd.trangThai == null ? "-" : gd.trangThai });
+            for (Object[] dong : dsGiaoDich) {
+                modelGiaoDich.addRow(dong);
             }
             JTable tblGiaoDich = new JTable(modelGiaoDich);
             caiDatBang(tblGiaoDich);
@@ -1337,57 +990,19 @@ public class FrmThongKeDoanhThu extends JPanel {
         winChiTiet.setVisible(true);
     }
 
+    private List<Object[]> layLichSuThanhToan(String maHoaDon) {
+        try {
+            return controller.layLichSuThanhToan(maHoaDon);
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Không thể tải lịch sử thanh toán:\n" + ex.getMessage(),
+                    "Lỗi CSDL", JOptionPane.ERROR_MESSAGE);
+            return new java.util.ArrayList<>();
+        }
+    }
+
     // XUẤT EXCEL
-    // Loại cột khi ghi Excel
-    private static final int LOAI_CHU_TRAI = 0;
-    private static final int LOAI_CHU_GIUA = 1;
-    private static final int LOAI_TIEN = 2;
-    private static final int LOAI_SO = 3;
-
-    // Chỉ số kiểu ô trong XLSX_STYLES (cellXfs)
-    private static final int KIEU_TIEU_DE = 1;
-    private static final int KIEU_CHU_TRAI = 2;
-    private static final int KIEU_GIUA = 3;
-    private static final int KIEU_TIEN = 4;
-
-    private static final String XML_HEAD = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
-    private static final String OOXML = "http://schemas.openxmlformats.org/";
-    private static final String REL_DOC = OOXML + "officeDocument/2006/relationships";
-
-    // Kiểu dáng: chỉ có viền đen mỏng + chữ in đậm cho tiêu đề, không màu
-    private static final String XLSX_STYLES = XML_HEAD
-            + "<styleSheet xmlns=\"" + OOXML + "spreadsheetml/2006/main\">"
-            + "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"#,##0&quot; đ&quot;\"/></numFmts>"
-            + "<fonts count=\"2\">"
-            + "<font><sz val=\"11\"/><name val=\"Calibri\"/></font>"
-            + "<font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font>"
-            + "</fonts>"
-            + "<fills count=\"2\">"
-            + "<fill><patternFill patternType=\"none\"/></fill>"
-            + "<fill><patternFill patternType=\"gray125\"/></fill>"
-            + "</fills>"
-            + "<borders count=\"2\">"
-            + "<border><left/><right/><top/><bottom/><diagonal/></border>"
-            + "<border><left style=\"thin\"><color auto=\"1\"/></left><right style=\"thin\"><color auto=\"1\"/></right>"
-            + "<top style=\"thin\"><color auto=\"1\"/></top><bottom style=\"thin\"><color auto=\"1\"/></bottom><diagonal/></border>"
-            + "</borders>"
-            + "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>"
-            + "<cellXfs count=\"5\">"
-            // 0 mặc định
-            + "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>"
-            // 1 tiêu đề cột: in đậm, giữa, có viền
-            + "<xf numFmtId=\"0\" fontId=\"1\" fillId=\"0\" borderId=\"1\" xfId=\"0\" applyFont=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"center\" vertical=\"center\"/></xf>"
-            // 2 chữ căn trái, có viền
-            + "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"1\" xfId=\"0\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"left\" vertical=\"center\"/></xf>"
-            // 3 căn giữa, có viền
-            + "<xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"1\" xfId=\"0\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"center\" vertical=\"center\"/></xf>"
-            // 4 tiền, căn phải, có viền
-            + "<xf numFmtId=\"164\" fontId=\"0\" fillId=\"0\" borderId=\"1\" xfId=\"0\" applyNumberFormat=\"1\" applyBorder=\"1\" applyAlignment=\"1\"><alignment horizontal=\"right\" vertical=\"center\"/></xf>"
-            + "</cellXfs>"
-            + "<cellStyles count=\"1\"><cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/></cellStyles>"
-            + "</styleSheet>";
-
-    // Xuất danh sách đang hiển thị ra file Excel
+    // Chọn nơi lưu rồi nhờ controller ghi file
     private void xuatExcel() {
         if (modelThongKe.getRowCount() == 0) {
             JOptionPane.showMessageDialog(this, "Không có dữ liệu để xuất.", "Xuất file Excel",
@@ -1413,7 +1028,7 @@ public class FrmThongKeDoanhThu extends JPanel {
         }
 
         try {
-            ghiXlsx(tep);
+            controller.xuatExcel(tep, modelThongKe);
             JOptionPane.showMessageDialog(this, "Đã xuất file thành công:\n" + tep.getAbsolutePath(),
                     "Xuất file Excel", JOptionPane.INFORMATION_MESSAGE);
         } catch (IOException ex) {
@@ -1423,171 +1038,9 @@ public class FrmThongKeDoanhThu extends JPanel {
         }
     }
 
-    // Xác định loại cột theo tên cột và nội dung
-    private int xacDinhLoaiCot(int cot) {
-        String ten = modelThongKe.getColumnName(cot);
-        if ("Số hóa đơn".equals(ten)) {
-            return LOAI_SO;
-        }
-        for (int dong = 0; dong < modelThongKe.getRowCount(); dong++) {
-            Object giaTri = modelThongKe.getValueAt(dong, cot);
-            if (giaTri instanceof String && ((String) giaTri).endsWith(" đ")) {
-                return LOAI_TIEN;
-            }
-        }
-        if ("Ngày".equals(ten) || "Tháng".equals(ten) || "Mã hóa đơn".equals(ten)
-                || "Biển số xe".equals(ten) || "Trạng thái thanh toán".equals(ten)) {
-            return LOAI_CHU_GIUA;
-        }
-        return LOAI_CHU_TRAI;
-    }
-
-    // Đọc số tiền từ chuỗi "1.234.000 đ"
-    private static long docTien(Object giaTri) {
-        String s = giaTri == null ? "" : giaTri.toString().replaceAll("[^0-9-]", "");
-        if (s.isEmpty() || s.equals("-")) {
-            return 0L;
-        }
-        return Long.parseLong(s);
-    }
-
-    // Số cột -> tên cột Excel (0 -> A, 26 -> AA)
-    private static String tenCotExcel(int cot) {
-        StringBuilder s = new StringBuilder();
-        for (cot++; cot > 0; cot = (cot - 1) / 26) {
-            s.insert(0, (char) ('A' + (cot - 1) % 26));
-        }
-        return s.toString();
-    }
-
-    private static String thoatXml(String chu) {
-        if (chu == null) {
-            return "";
-        }
-        return chu.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "")
-                .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
-    }
-
-    private static void ghiOChu(StringBuilder sb, int cot, int dong, String chu, int kieu) {
-        sb.append("<c r=\"").append(tenCotExcel(cot)).append(dong).append("\" s=\"").append(kieu)
-                .append("\" t=\"inlineStr\"><is><t xml:space=\"preserve\">").append(thoatXml(chu))
-                .append("</t></is></c>");
-    }
-
-    private static void ghiOSo(StringBuilder sb, int cot, int dong, long so, int kieu) {
-        sb.append("<c r=\"").append(tenCotExcel(cot)).append(dong).append("\" s=\"").append(kieu)
-                .append("\"><v>").append(so).append("</v></c>");
-    }
-
-    private static void ghiZip(ZipOutputStream zos, String ten, String noiDung) throws IOException {
-        zos.putNextEntry(new ZipEntry(ten));
-        zos.write(noiDung.getBytes(StandardCharsets.UTF_8));
-        zos.closeEntry();
-    }
-
-    // Bảng đơn giản bắt đầu từ ô A1: cột STT + các cột đang hiển thị, có viền, tiền
-    // lưu dạng số
-    private void ghiXlsx(File tep) throws IOException {
-        final int soCotNguon = modelThongKe.getColumnCount();
-        final int soDong = modelThongKe.getRowCount();
-        final int soCot = soCotNguon + 1; // thêm cột STT
-
-        String[] dsTieuDe = new String[soCot];
-        int[] dsLoai = new int[soCot];
-        int[] dsRong = new int[soCot];
-        dsTieuDe[0] = "STT";
-        dsLoai[0] = LOAI_CHU_GIUA;
-        for (int c = 0; c < soCotNguon; c++) {
-            dsTieuDe[c + 1] = modelThongKe.getColumnName(c);
-            dsLoai[c + 1] = xacDinhLoaiCot(c);
-        }
-        for (int c = 0; c < soCot; c++) {
-            dsRong[c] = dsTieuDe[c].length() + 4;
-        }
-        dsRong[0] = 7;
-
-        StringBuilder dsDongXml = new StringBuilder();
-
-        // Dòng tiêu đề (dòng 1)
-        dsDongXml.append("<row r=\"1\">");
-        for (int c = 0; c < soCot; c++) {
-            ghiOChu(dsDongXml, c, 1, dsTieuDe[c], KIEU_TIEU_DE);
-        }
-        dsDongXml.append("</row>");
-
-        // Dữ liệu
-        for (int d = 0; d < soDong; d++) {
-            int dongExcel = 2 + d;
-            dsDongXml.append("<row r=\"").append(dongExcel).append("\">");
-            ghiOSo(dsDongXml, 0, dongExcel, d + 1, KIEU_GIUA);
-            for (int c = 1; c < soCot; c++) {
-                Object giaTri = modelThongKe.getValueAt(d, c - 1);
-                String chu = giaTri == null ? "" : giaTri.toString();
-                int doDai = chu.length();
-                if (dsLoai[c] == LOAI_TIEN) {
-                    long tien = docTien(giaTri);
-                    ghiOSo(dsDongXml, c, dongExcel, tien, KIEU_TIEN);
-                    doDai = MONEY.format(tien).length() + 4;
-                } else if (dsLoai[c] == LOAI_SO) {
-                    long so = giaTri instanceof Number ? ((Number) giaTri).longValue() : docTien(giaTri);
-                    ghiOSo(dsDongXml, c, dongExcel, so, KIEU_GIUA);
-                } else {
-                    ghiOChu(dsDongXml, c, dongExcel, chu,
-                            dsLoai[c] == LOAI_CHU_GIUA ? KIEU_GIUA : KIEU_CHU_TRAI);
-                }
-                dsRong[c] = Math.max(dsRong[c], Math.min(doDai + 3, 45));
-            }
-            dsDongXml.append("</row>");
-        }
-
-        // Sheet: giữ đường kẻ ô mặc định của Excel, cố định dòng tiêu đề
-        StringBuilder sheet = new StringBuilder();
-        sheet.append(XML_HEAD)
-                .append("<worksheet xmlns=\"").append(OOXML).append("spreadsheetml/2006/main\">")
-                .append("<sheetViews><sheetView workbookViewId=\"0\">")
-                .append("<pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/>")
-                .append("</sheetView></sheetViews>")
-                .append("<sheetFormatPr defaultRowHeight=\"15\"/><cols>");
-        for (int c = 0; c < soCot; c++) {
-            sheet.append("<col min=\"").append(c + 1).append("\" max=\"").append(c + 1)
-                    .append("\" width=\"").append(dsRong[c]).append("\" customWidth=\"1\"/>");
-        }
-        sheet.append("</cols><sheetData>").append(dsDongXml).append("</sheetData></worksheet>");
-
-        // Đóng gói các phần của file .xlsx (thực chất là file zip chứa XML)
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tep))) {
-            ghiZip(zos, "[Content_Types].xml", XML_HEAD
-                    + "<Types xmlns=\"" + OOXML + "package/2006/content-types\">"
-                    + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
-                    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
-                    + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
-                    + "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
-                    + "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>"
-                    + "</Types>");
-            ghiZip(zos, "_rels/.rels", XML_HEAD
-                    + "<Relationships xmlns=\"" + OOXML + "package/2006/relationships\">"
-                    + "<Relationship Id=\"rId1\" Type=\"" + REL_DOC + "/officeDocument\" Target=\"xl/workbook.xml\"/>"
-                    + "</Relationships>");
-            ghiZip(zos, "xl/workbook.xml", XML_HEAD
-                    + "<workbook xmlns=\"" + OOXML + "spreadsheetml/2006/main\" xmlns:r=\"" + REL_DOC + "\">"
-                    + "<sheets><sheet name=\"Hóa đơn\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>");
-            ghiZip(zos, "xl/_rels/workbook.xml.rels", XML_HEAD
-                    + "<Relationships xmlns=\"" + OOXML + "package/2006/relationships\">"
-                    + "<Relationship Id=\"rId1\" Type=\"" + REL_DOC + "/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
-                    + "<Relationship Id=\"rId2\" Type=\"" + REL_DOC + "/styles\" Target=\"styles.xml\"/>"
-                    + "</Relationships>");
-            ghiZip(zos, "xl/styles.xml", XLSX_STYLES);
-            ghiZip(zos, "xl/worksheets/sheet1.xml", sheet.toString());
-        }
-    }
-
     // TIỆN ÍCH GIAO DIỆN
     private static Font font(int kieu, int coChu) {
         return new Font("Segoe UI", kieu, coChu);
-    }
-
-    private static String formatTien(long soTien) {
-        return MONEY.format(soTien) + " đ";
     }
 
     // Model bảng không cho sửa ô

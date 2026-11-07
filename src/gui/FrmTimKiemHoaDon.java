@@ -1,6 +1,7 @@
 package gui;
 
 import connectDB.ConnectDB;
+import controller.TimKiemHoaDonController;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -20,22 +21,12 @@ import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.text.NumberFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.Locale;
+import java.util.List;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -64,8 +55,14 @@ import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
 
+/**
+ * Giao diện "Tìm kiếm hóa đơn": chỉ dựng giao diện và cung cấp getter / hàm
+ * hiển thị.
+ * Sự kiện nằm ở TimKiemHoaDonController, truy vấn CSDL nằm ở TimKiemHoaDonDAO.
+ */
 public class FrmTimKiemHoaDon extends JPanel {
-    private static class JDateChooser extends JTextField {
+    // Ô chọn ngày (dạng gõ dd/MM/yyyy), không cho chọn quá ngày tối đa
+    public static class JDateChooser extends JTextField {
         private static final long serialVersionUID = 1L;
         private final SimpleDateFormat format = new SimpleDateFormat("dd/MM/yyyy");
         private Date date;
@@ -136,48 +133,27 @@ public class FrmTimKiemHoaDon extends JPanel {
         }
     }
 
-    private static final Color MAU_CHU = new Color(40, 50, 65);
-    private static final Color MAU_PHU = new Color(100, 112, 130);
-    private static final Color MAU_NEN = new Color(244, 247, 251);
-    private static final Color MAU_NUT = new Color(37, 99, 235);
-    private static final Color MAU_NUT_DAM = new Color(29, 78, 216);
-    private static final Color MAU_VIEN = new Color(220, 225, 232);
-    private static final Color MAU_DO = new Color(220, 53, 69);
-    private static final Color MAU_XANH_LA = new Color(22, 130, 70);
-    private static final Color MAU_CAM = new Color(180, 83, 9);
-    private static final Color MAU_NUT_PHU = new Color(241, 245, 249);
-    private static final Color MAU_VIEN_NUT_PHU = new Color(180, 190, 205);
-    private static final Font FONT_THUONG = new Font("Segoe UI", Font.PLAIN, 13);
-    private static final Font FONT_DAM = new Font("Segoe UI", Font.BOLD, 13);
+    // 1. HẰNG SỐ (public để controller dùng chung)
+    public static final Color MAU_CHU = new Color(40, 50, 65);
+    public static final Color MAU_PHU = new Color(100, 112, 130);
+    public static final Color MAU_NEN = new Color(244, 247, 251);
+    public static final Color MAU_NUT = new Color(37, 99, 235);
+    public static final Color MAU_NUT_DAM = new Color(29, 78, 216);
+    public static final Color MAU_VIEN = new Color(220, 225, 232);
+    public static final Color MAU_DO = new Color(220, 53, 69);
+    public static final Color MAU_XANH_LA = new Color(22, 130, 70);
+    public static final Color MAU_CAM = new Color(180, 83, 9);
+    public static final Color MAU_NUT_PHU = new Color(241, 245, 249);
+    public static final Color MAU_VIEN_NUT_PHU = new Color(180, 190, 205);
+    public static final Font FONT_THUONG = new Font("Segoe UI", Font.PLAIN, 13);
+    public static final Font FONT_DAM = new Font("Segoe UI", Font.BOLD, 13);
     // Trạng thái thanh toán
-    private static final String TAT_CA = "Tất cả";
-    private static final String DA_THANH_TOAN = "Đã thanh toán";
-    private static final String CHUA_THANH_TOAN = "Chưa thanh toán";
-    private static final String THANH_TOAN_MOT_PHAN = "Thanh toán một phần";
-    // Ngày giờ, số
-    private static final ZoneId MUI_GIO = ZoneId.of("Asia/Ho_Chi_Minh");
-    private static final DateTimeFormatter DF_NGAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final NumberFormat NF_TIEN = NumberFormat.getIntegerInstance(Locale.forLanguageTag("vi-VN"));
-    // Câu lệnh SQL
-    // LEFT JOIN để hóa đơn không có phiếu sửa chữa (mua phụ tùng) vẫn hiện ra
-    private static final String SQL_TIM_KIEM = """
-            SELECT hd.maHoaDon, hd.maPhieuSuaChua, hd.maNV,
-                   kh.hoTen AS tenKhachHang, x.bienSo, hd.maKM,
-                   hd.ngayLap, hd.soTien, hd.trangThai
-            FROM HoaDon hd
-            LEFT JOIN PhieuSuaChua p ON hd.maPhieuSuaChua = p.maPhieuSuaChua
-            LEFT JOIN KhachHang kh ON p.maKH = kh.maKH
-            LEFT JOIN Xe x ON p.maXe = x.maXe
-            WHERE (? = '' OR hd.maHoaDon LIKE ?)
-              AND (? = '' OR hd.maPhieuSuaChua LIKE ?)
-              AND (? = '' OR hd.maNV LIKE ?)
-              AND (? = '' OR ISNULL(hd.maKM, '') LIKE ?)
-              AND (? = '' OR p.maKH LIKE ? OR kh.hoTen LIKE ?)
-              AND (? = '' OR p.maXe LIKE ? OR x.bienSo LIKE ?)
-              AND (? IS NULL OR (hd.ngayLap >= ? AND hd.ngayLap < DATEADD(DAY, 1, ?)))
-              AND (? IS NULL OR hd.trangThai = ?)
-            ORDER BY hd.ngayLap DESC
-            """;
+    public static final String TAT_CA = "Tất cả";
+    public static final String DA_THANH_TOAN = "Đã thanh toán";
+    public static final String CHUA_THANH_TOAN = "Chưa thanh toán";
+    public static final String THANH_TOAN_MOT_PHAN = "Thanh toán một phần";
+    public static final ZoneId MUI_GIO = ZoneId.of("Asia/Ho_Chi_Minh");
+
     // Ô nhập điều kiện
     private JTextField txtMaHoaDon;
     private JTextField txtMaPhieuSuaChua;
@@ -195,8 +171,6 @@ public class FrmTimKiemHoaDon extends JPanel {
     private JTable tblHoaDon;
     private DefaultTableModel modelHoaDon;
     private final JLabel lblKetQua = new JLabel(" ");
-    // Tránh tìm kiếm lặp nhiều lần khi bấm "Làm mới"
-    private boolean dangLamMoi = false;
 
     // 2. KHỞI TẠO
     public FrmTimKiemHoaDon() {
@@ -204,8 +178,6 @@ public class FrmTimKiemHoaDon extends JPanel {
         setBackground(MAU_NEN);
         setBorder(new EmptyBorder(14, 18, 14, 18));
         dungGiaoDien();
-        caiDatSuKien();
-        timKiemHoaDon();
     }
 
     // 3. XÂY DỰNG GIAO DIỆN CHÍNH
@@ -325,7 +297,7 @@ public class FrmTimKiemHoaDon extends JPanel {
         scrBang.setBorder(BorderFactory.createLineBorder(MAU_VIEN));
         scrBang.getViewport().setBackground(Color.WHITE);
 
-        // Hàng dưới: gợi ý bên trái, nút xem chi tiết bên phải
+        // Hàng dưới: nút xem chi tiết bên phải
         btnXemChiTiet = taoNut("Xem chi tiết", MAU_XANH_LA, new Color(21, 110, 60),
                 Color.WHITE, new Color(21, 110, 60));
         btnXemChiTiet.setEnabled(false);
@@ -487,7 +459,7 @@ public class FrmTimKiemHoaDon extends JPanel {
         }
     }
 
-    private static Color mauTrangThai(String trangThai) {
+    public static Color mauTrangThai(String trangThai) {
         if (DA_THANH_TOAN.equals(trangThai))
             return MAU_XANH_LA;
         if (THANH_TOAN_MOT_PHAN.equals(trangThai))
@@ -497,198 +469,95 @@ public class FrmTimKiemHoaDon extends JPanel {
         return MAU_CHU;
     }
 
-    // 5. SỰ KIỆN
-    private void caiDatSuKien() {
-        btnTimKiem.addActionListener(e -> timKiemHoaDon());
-        btnLamMoi.addActionListener(e -> lamMoi());
-        btnXemChiTiet.addActionListener(e -> xemChiTiet());
-
-        // Nhấn Enter ở bất kỳ ô nhập nào cũng tìm kiếm
-        for (JTextField txt : new JTextField[] { txtMaHoaDon, txtMaPhieuSuaChua, txtMaNV, txtMaKM,
-                txtKhachHang, txtXe }) {
-            txt.addActionListener(e -> timKiemHoaDon());
-        }
-
-        // Đổi trạng thái hoặc chọn ngày thì tự tìm lại
-        cmbTrangThai.addActionListener(e -> timKiemKhiDoiDieuKien());
-        dchNgayLap.addPropertyChangeListener("date", e -> timKiemKhiDoiDieuKien());
-
-        // Nút "Xem chi tiết" chỉ sáng khi đã chọn một dòng
-        tblHoaDon.getSelectionModel().addListSelectionListener(
-                e -> btnXemChiTiet.setEnabled(tblHoaDon.getSelectedRow() >= 0));
-
-        // Nhấp đúp vào dòng để xem chi tiết
-        tblHoaDon.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)
-                        && tblHoaDon.getSelectedRow() >= 0) {
-                    xemChiTiet();
-                }
-            }
-        });
+    // 5. GETTER (để controller gắn sự kiện và đọc điều kiện)
+    public JTextField getTxtMaHoaDon() {
+        return txtMaHoaDon;
     }
 
-    private void timKiemKhiDoiDieuKien() {
-        if (!dangLamMoi) {
-            timKiemHoaDon();
-        }
+    public JTextField getTxtMaPhieuSuaChua() {
+        return txtMaPhieuSuaChua;
     }
 
-    private void lamMoi() {
-        dangLamMoi = true;
+    public JTextField getTxtMaNV() {
+        return txtMaNV;
+    }
 
-        for (JTextField txt : new JTextField[] { txtMaHoaDon, txtMaPhieuSuaChua, txtMaNV, txtMaKM,
-                txtKhachHang, txtXe }) {
+    public JTextField getTxtMaKM() {
+        return txtMaKM;
+    }
+
+    public JTextField getTxtKhachHang() {
+        return txtKhachHang;
+    }
+
+    public JTextField getTxtXe() {
+        return txtXe;
+    }
+
+    // Tất cả ô nhập chữ (không gồm ô ngày)
+    public JTextField[] getDanhSachOChu() {
+        return new JTextField[] { txtMaHoaDon, txtMaPhieuSuaChua, txtMaNV, txtMaKM, txtKhachHang, txtXe };
+    }
+
+    public JDateChooser getDchNgayLap() {
+        return dchNgayLap;
+    }
+
+    public JComboBox<String> getCmbTrangThai() {
+        return cmbTrangThai;
+    }
+
+    public JButton getBtnTimKiem() {
+        return btnTimKiem;
+    }
+
+    public JButton getBtnLamMoi() {
+        return btnLamMoi;
+    }
+
+    public JButton getBtnXemChiTiet() {
+        return btnXemChiTiet;
+    }
+
+    public JTable getTblHoaDon() {
+        return tblHoaDon;
+    }
+
+    public DefaultTableModel getModelHoaDon() {
+        return modelHoaDon;
+    }
+
+    // 6. HÀM HIỂN THỊ (controller gọi)
+    // Xóa trắng các ô điều kiện
+    public void xoaDieuKien() {
+        for (JTextField txt : getDanhSachOChu()) {
             txt.setText("");
         }
         dchNgayLap.setDate(null);
         cmbTrangThai.setSelectedIndex(0);
-
-        dangLamMoi = false;
-
-        timKiemHoaDon();
-        txtMaHoaDon.requestFocus();
     }
 
-    // 6. NGHIỆP VỤ: TÌM KIẾM (CSDL)
-    private void timKiemHoaDon() {
-        LocalDate ngayChon = layNgay(dchNgayLap);
-
-        // Kiểm tra bổ sung để tránh ngày tương lai (trường hợp gõ tay)
-        if (ngayChon != null && ngayChon.isAfter(LocalDate.now(MUI_GIO))) {
-            JOptionPane.showMessageDialog(this, "Ngày lập không được lớn hơn ngày hiện tại.",
-                    "Lỗi nhập liệu", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        String trangThai = (String) cmbTrangThai.getSelectedItem();
-        if (TAT_CA.equals(trangThai)) {
-            trangThai = null;
-        }
-
+    public void xoaBang() {
         modelHoaDon.setRowCount(0);
-
-        try {
-            // Dùng chung kết nối của ứng dụng, KHÔNG đóng sau khi tìm xong
-            Connection conn = ConnectDB.getConnection();
-            if (conn == null || conn.isClosed()) {
-                datKetQua("Chưa kết nối được cơ sở dữ liệu", MAU_DO);
-                JOptionPane.showMessageDialog(this,
-                        "Không thể kết nối SQL Server.\nVui lòng kiểm tra cấu hình kết nối.",
-                        "Lỗi kết nối", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            try (PreparedStatement ps = conn.prepareStatement(SQL_TIM_KIEM)) {
-                // Thứ tự tham số khớp với SQL_TIM_KIEM: giá trị rồi các mẫu LIKE
-                int i = 1;
-                i = datThamSoChuoi(ps, i, txtMaHoaDon.getText().trim(), 1);
-                i = datThamSoChuoi(ps, i, txtMaPhieuSuaChua.getText().trim(), 1);
-                i = datThamSoChuoi(ps, i, txtMaNV.getText().trim(), 1);
-                i = datThamSoChuoi(ps, i, txtMaKM.getText().trim(), 1);
-                i = datThamSoChuoi(ps, i, txtKhachHang.getText().trim(), 2); // mã hoặc tên khách hàng
-                i = datThamSoChuoi(ps, i, txtXe.getText().trim(), 2); // mã xe hoặc biển số xe
-
-                // Ngày lập: (IS NULL, >=, <) cùng một mốc ngày
-                Timestamp mocNgay = ngayChon == null ? null : Timestamp.valueOf(ngayChon.atStartOfDay());
-                for (int k = 0; k < 3; k++) {
-                    ps.setTimestamp(i++, mocNgay);
-                }
-                // Trạng thái: (IS NULL, =)
-                for (int k = 0; k < 2; k++) {
-                    ps.setString(i++, trangThai);
-                }
-
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        Timestamp ngayLap = rs.getTimestamp("ngayLap");
-
-                        modelHoaDon.addRow(new Object[] {
-                                rs.getString("maHoaDon"),
-                                rs.getString("maPhieuSuaChua"),
-                                rs.getString("maNV"),
-                                rs.getString("tenKhachHang"),
-                                rs.getString("bienSo"),
-                                rs.getString("maKM"),
-                                ngayLap == null ? "" : ngayLap.toLocalDateTime().format(DF_NGAY),
-                                dinhDangTien(rs.getBigDecimal("soTien")),
-                                rs.getString("trangThai")
-                        });
-                    }
-                }
-            }
-
-            // Thông báo kết quả ngay trên tiêu đề thẻ, không bật hộp thoại làm phiền
-            if (modelHoaDon.getRowCount() == 0) {
-                datKetQua("Không tìm thấy hóa đơn phù hợp", MAU_CAM);
-            } else {
-                datKetQua("Tìm thấy " + modelHoaDon.getRowCount() + " hóa đơn", MAU_XANH_LA);
-            }
-
-        } catch (SQLException ex) {
-            datKetQua("Lỗi tìm kiếm", MAU_DO);
-            JOptionPane.showMessageDialog(this,
-                    "Không thể tìm kiếm hóa đơn.\nChi tiết: " + ex.getMessage(),
-                    "Lỗi cơ sở dữ liệu", JOptionPane.ERROR_MESSAGE);
-        }
     }
 
-    // Gán tham số chuỗi: giá trị gốc, rồi soLike mẫu "%giá trị%". Trả về vị trí
-    // tham số kế tiếp.
-    private int datThamSoChuoi(PreparedStatement ps, int i, String giaTri, int soLike) throws SQLException {
-        ps.setString(i++, giaTri);
-        for (int k = 0; k < soLike; k++) {
-            ps.setString(i++, "%" + giaTri + "%");
-        }
-        return i;
+    public void themDongBang(Object[] dong) {
+        modelHoaDon.addRow(dong);
     }
 
-    private void datKetQua(String text, Color mau) {
+    // Thông báo kết quả ngay trên tiêu đề thẻ, không bật hộp thoại làm phiền
+    public void hienKetQua(String text, Color mau) {
         lblKetQua.setText(text);
         lblKetQua.setForeground(mau);
     }
 
-    private String dinhDangTien(BigDecimal so) {
-        return so == null ? "0" : NF_TIEN.format(so);
+    public void hienThongBao(String noiDung, String tieuDe, int loai) {
+        JOptionPane.showMessageDialog(this, noiDung, tieuDe, loai);
     }
 
-    // maKH, maXe lấy qua phiếu sửa chữa; thueVAT, tienGiamGia, soTien lấy từ hóa
-    // đơn
-    private static final String SQL_THONG_TIN_PHU = """
-            SELECT p.maKH, p.maXe, hd.thueVAT, hd.tienGiamGia, hd.soTien
-            FROM HoaDon hd
-            LEFT JOIN PhieuSuaChua p ON hd.maPhieuSuaChua = p.maPhieuSuaChua
-            WHERE hd.maHoaDon = ?
-            """;
-
-    private static final String SQL_DONG_HANG = """
-            SELECT 'D' AS loai, dv.maDV AS ma, dv.tenDV AS ten, ct.soLuong, ct.donGia
-            FROM ChiTietHoaDon ct JOIN DichVu dv ON ct.maDV = dv.maDV
-            WHERE ct.maHoaDon = ?
-            UNION ALL
-            SELECT 'P', pt.maPhuTung, pt.tenPhuTung, ct.soLuong, ct.donGia
-            FROM ChiTietHoaDon ct JOIN PhuTung pt ON ct.maPhuTung = pt.maPhuTung
-            WHERE ct.maHoaDon = ?
-            ORDER BY loai
-            """;
-
-    private static final String SQL_DA_THANH_TOAN = """
-            SELECT ISNULL(SUM(soTienThanhToan), 0)
-            FROM GiaoDichThanhToan
-            WHERE maHoaDon = ?
-              AND trangThaiGD = N'Thành công'
-            """;
-
-    private static class ChiTietHD {
-        String maKH = "", maXe = "";
-        BigDecimal tienThue = BigDecimal.ZERO;
-        BigDecimal tienGiam = BigDecimal.ZERO;
-        BigDecimal tongThanhToan = BigDecimal.ZERO;
-        BigDecimal tienDichVu = BigDecimal.ZERO;
-        BigDecimal tienPhuTung = BigDecimal.ZERO;
-        BigDecimal daThanhToan = BigDecimal.ZERO;
-        DefaultTableModel modelDong = new DefaultTableModel(
+    // Model rỗng cho bảng dịch vụ, phụ tùng trong khung chi tiết
+    public DefaultTableModel taoModelDongHang() {
+        return new DefaultTableModel(
                 new String[] { "STT", "Mã", "Tên hàng hóa, dịch vụ", "SL", "Đơn giá", "Thành tiền" }, 0) {
             @Override
             public boolean isCellEditable(int r, int c) {
@@ -697,85 +566,18 @@ public class FrmTimKiemHoaDon extends JPanel {
         };
     }
 
-    private ChiTietHD taiChiTiet(String maHD) throws SQLException {
-        ChiTietHD ct = new ChiTietHD();
-        Connection conn = ConnectDB.getConnection();
-
-        try (PreparedStatement ps = conn.prepareStatement(SQL_THONG_TIN_PHU)) {
-            ps.setString(1, maHD);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    ct.maKH = rs.getString("maKH");
-                    ct.maXe = rs.getString("maXe");
-                    ct.tienThue = nz(rs.getBigDecimal("thueVAT"));
-                    ct.tienGiam = nz(rs.getBigDecimal("tienGiamGia"));
-                    ct.tongThanhToan = nz(rs.getBigDecimal("soTien"));
-                }
-            }
-        }
-
-        try (PreparedStatement ps = conn.prepareStatement(SQL_DONG_HANG)) {
-            ps.setString(1, maHD);
-            ps.setString(2, maHD);
-            try (ResultSet rs = ps.executeQuery()) {
-                int stt = 1;
-                while (rs.next()) {
-                    int sl = rs.getInt("soLuong");
-                    BigDecimal donGia = nz(rs.getBigDecimal("donGia"));
-                    BigDecimal thanhTien = donGia.multiply(BigDecimal.valueOf(sl));
-                    if ("D".equals(rs.getString("loai"))) {
-                        ct.tienDichVu = ct.tienDichVu.add(thanhTien);
-                    } else {
-                        ct.tienPhuTung = ct.tienPhuTung.add(thanhTien);
-                    }
-                    ct.modelDong.addRow(new Object[] { stt++, rs.getString("ma"), rs.getString("ten"), sl,
-                            dinhDangTien(donGia), dinhDangTien(thanhTien) });
-                }
-            }
-        }
-
-        // Lấy tổng số tiền đã thanh toán thành công
-        try (PreparedStatement ps = conn.prepareStatement(SQL_DA_THANH_TOAN)) {
-            ps.setString(1, maHD);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    ct.daThanhToan = nz(rs.getBigDecimal(1));
-                }
-            }
-        }
-        return ct;
-    }
-
-    private BigDecimal nz(BigDecimal so) {
-        return so == null ? BigDecimal.ZERO : so;
-    }
-
-    private void xemChiTiet() {
-        int row = tblHoaDon.convertRowIndexToModel(tblHoaDon.getSelectedRow());
-        String maHD = giaTriHienThi(modelHoaDon.getValueAt(row, 0));
-        Object rawPhieu = modelHoaDon.getValueAt(row, 1);
-        String maPhieu = (rawPhieu == null || rawPhieu.toString().isBlank()) ? null : rawPhieu.toString();
-        String trangThai = giaTriHienThi(modelHoaDon.getValueAt(row, 8));
-
-        ChiTietHD ct;
-        try {
-            ct = taiChiTiet(maHD);
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Không thể tải chi tiết hóa đơn.\nChi tiết: " + ex.getMessage(),
-                    "Lỗi cơ sở dữ liệu", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // Tính tiền
-        BigDecimal tongHoaDon = ct.tienDichVu.add(ct.tienPhuTung); // chưa gồm VAT
-        boolean daTT = DA_THANH_TOAN.equals(trangThai);
-        boolean motPhan = THANH_TOAN_MOT_PHAN.equals(trangThai);
-        boolean chuaTT = CHUA_THANH_TOAN.equals(trangThai);
-
-        BigDecimal daTra = daTT ? ct.tongThanhToan : (motPhan ? ct.daThanhToan : BigDecimal.ZERO);
-        BigDecimal conLai = ct.tongThanhToan.subtract(daTra).max(BigDecimal.ZERO);
-
+    /**
+     * Hiện khung chi tiết hóa đơn.
+     * 
+     * @param thongTin     các cặp { nhãn, giá trị } của thẻ "Thông tin chung"
+     * @param modelDong    model các dòng dịch vụ, phụ tùng
+     * @param dongTien     các dòng tổng kết, mỗi dòng: { String nhãn, String giá
+     *                     trị, Color màu, Boolean đậm }
+     * @param choThanhToan true thì có thêm nút "Thanh toán"
+     * @param khiThanhToan việc làm khi bấm "Thanh toán" (sau khi đóng khung)
+     */
+    public void hienThiChiTiet(String maHD, String[][] thongTin, DefaultTableModel modelDong,
+            List<Object[]> dongTien, boolean choThanhToan, Runnable khiThanhToan) {
         Window winCha = SwingUtilities.getWindowAncestor(this);
         JDialog winChiTiet = new JDialog(winCha, "Thông tin hóa đơn " + maHD,
                 Dialog.ModalityType.APPLICATION_MODAL);
@@ -787,17 +589,7 @@ public class FrmTimKiemHoaDon extends JPanel {
         // Thẻ thông tin chung: 3 thông tin / dòng
         The pnlThongTin = new The("THÔNG TIN CHUNG");
         pnlThongTin.pnlNoiDung.setLayout(new GridLayout(0, 3, 20, 8));
-        String[][] cap = {
-                { "Khách hàng", giaTriHienThi(modelHoaDon.getValueAt(row, 3)) },
-                { "Mã khách hàng", giaTriHienThi(ct.maKH) },
-                { "Ngày lập", giaTriHienThi(modelHoaDon.getValueAt(row, 6)) },
-                { "Biển số xe", giaTriHienThi(modelHoaDon.getValueAt(row, 4)) },
-                { "Mã xe", giaTriHienThi(ct.maXe) },
-                { "Mã nhân viên", giaTriHienThi(modelHoaDon.getValueAt(row, 2)) },
-                { "Phiếu sửa chữa", giaTriHienThi(maPhieu) },
-                { "Mã khuyến mãi", giaTriHienThi(modelHoaDon.getValueAt(row, 5)) },
-                { "Trạng thái", trangThai } };
-        for (String[] c : cap) {
+        for (String[] c : thongTin) {
             JPanel pnlCap = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 0));
             pnlCap.setOpaque(false);
             JLabel lblNhan = new JLabel(c[0] + ":");
@@ -814,7 +606,7 @@ public class FrmTimKiemHoaDon extends JPanel {
         // Thẻ bảng dịch vụ, phụ tùng (cao theo số dòng)
         The pnlBang = new The("CHI TIẾT DỊCH VỤ, PHỤ TÙNG");
         pnlBang.pnlNoiDung.setLayout(new BorderLayout());
-        JTable tblDong = new JTable(ct.modelDong);
+        JTable tblDong = new JTable(modelDong);
         tblDong.setFont(FONT_THUONG);
         tblDong.setForeground(MAU_CHU);
         tblDong.setRowHeight(28);
@@ -836,29 +628,13 @@ public class FrmTimKiemHoaDon extends JPanel {
         pnlBangDong.add(tblDong.getTableHeader(), BorderLayout.NORTH);
         pnlBangDong.add(tblDong, BorderLayout.CENTER);
         pnlBang.pnlNoiDung.add(pnlBangDong, BorderLayout.CENTER);
+
         // Thẻ tổng kết
         The pnlTien = new The("TỔNG KẾT");
         int h = 0;
-        themDongChiTiet(pnlTien.pnlNoiDung, h++, "Tổng hóa đơn (chưa gồm VAT)",
-                dinhDangTien(tongHoaDon) + " đ", MAU_CHU, true);
-        themDongChiTiet(pnlTien.pnlNoiDung, h++, "Tiền thuế (VAT)",
-                dinhDangTien(ct.tienThue) + " đ", MAU_CHU, false);
-        themDongChiTiet(pnlTien.pnlNoiDung, h++, "Tiền giảm",
-                "- " + dinhDangTien(ct.tienGiam) + " đ", MAU_DO, false);
-        themDongChiTiet(pnlTien.pnlNoiDung, h++, "TỔNG THANH TOÁN",
-                dinhDangTien(ct.tongThanhToan) + " đ", MAU_NUT, true);
-
-        if (daTT) {
-            themDongChiTiet(pnlTien.pnlNoiDung, h++, "Đã thanh toán",
-                    dinhDangTien(daTra) + " đ", MAU_XANH_LA, true);
-        } else if (motPhan) {
-            themDongChiTiet(pnlTien.pnlNoiDung, h++, "Đã thanh toán",
-                    dinhDangTien(daTra) + " đ", MAU_XANH_LA, true);
-            themDongChiTiet(pnlTien.pnlNoiDung, h++, "Còn lại",
-                    dinhDangTien(conLai) + " đ", MAU_DO, true);
-        } else if (chuaTT) {
-            themDongChiTiet(pnlTien.pnlNoiDung, h++, "Còn lại",
-                    dinhDangTien(conLai) + " đ", MAU_DO, true);
+        for (Object[] d : dongTien) {
+            themDongChiTiet(pnlTien.pnlNoiDung, h++, (String) d[0], (String) d[1], (Color) d[2],
+                    (Boolean) d[3]);
         }
 
         // Nút
@@ -869,11 +645,11 @@ public class FrmTimKiemHoaDon extends JPanel {
         pnlNut.setOpaque(false);
         pnlNut.add(btnDong);
 
-        if (chuaTT || motPhan) {
+        if (choThanhToan) {
             JButton btnThanhToan = taoNut("Thanh toán", MAU_NUT, MAU_NUT_DAM, Color.WHITE, MAU_NUT_DAM);
             btnThanhToan.addActionListener(e -> {
                 winChiTiet.dispose();
-                moFrmThanhToan(maHD);
+                khiThanhToan.run();
             });
             pnlNut.add(btnThanhToan);
             winChiTiet.getRootPane().setDefaultButton(btnThanhToan);
@@ -916,32 +692,6 @@ public class FrmTimKiemHoaDon extends JPanel {
         winChiTiet.setVisible(true);
     }
 
-    // Mở màn hình thanh toán cho hóa đơn; đóng xong thì tìm kiếm lại để cập nhật
-    // trạng thái
-    private void moFrmThanhToan(String maHD) {
-        Object frm = new FrmThanhToan(maHD);
-
-        if (frm instanceof JFrame) {
-            JFrame f = (JFrame) frm;
-            f.setLocationRelativeTo(this);
-            f.addWindowListener(new WindowAdapter() {
-                @Override
-                public void windowClosed(WindowEvent e) {
-                    timKiemHoaDon();
-                }
-            });
-            f.setVisible(true);
-        } else if (frm instanceof JPanel) {
-            JDialog dlg = new JDialog(SwingUtilities.getWindowAncestor(this), "Thanh toán hóa đơn " + maHD,
-                    Dialog.ModalityType.APPLICATION_MODAL);
-            dlg.setContentPane((JPanel) frm);
-            dlg.pack();
-            dlg.setLocationRelativeTo(this);
-            dlg.setVisible(true);
-            timKiemHoaDon(); // dialog modal: chạy tiếp ở đây sau khi đóng
-        }
-    }
-
     // Một dòng "nhãn bên trái - giá trị bên phải"
     private void themDongChiTiet(JPanel pnl, int hang, String nhan, String giaTri, Color mau, boolean dam) {
         GridBagConstraints c = new GridBagConstraints();
@@ -968,23 +718,11 @@ public class FrmTimKiemHoaDon extends JPanel {
         pnl.add(lblGiaTri, c);
     }
 
-    // Giá trị rỗng / null hiển thị là "—"
-    private String giaTriHienThi(Object value) {
-        return (value == null || value.toString().trim().isEmpty()) ? "---" : value.toString();
-    }
-
-    // 8. TIỆN ÍCH
-    // Ngày
-    private LocalDate layNgay(JDateChooser dch) {
-        Date date = dch.getDate();
-        return date == null ? null : date.toInstant().atZone(MUI_GIO).toLocalDate();
-    }
-
+    // 7. TIỆN ÍCH TẠO THÀNH PHẦN
     private Date toDate(LocalDate ngay) {
         return Date.from(ngay.atStartOfDay(MUI_GIO).toInstant());
     }
 
-    // Thành phần giao diện
     private JTextField oNhap() {
         JTextField txt = new JTextField();
         txt.setFont(FONT_THUONG);
@@ -1043,7 +781,10 @@ public class FrmTimKiemHoaDon extends JPanel {
             winTimKiemHoaDon.setSize(1250, 720);
             winTimKiemHoaDon.setMinimumSize(new Dimension(1000, 600));
             winTimKiemHoaDon.setLocationRelativeTo(null);
-            winTimKiemHoaDon.setContentPane(new FrmTimKiemHoaDon());
+
+            FrmTimKiemHoaDon frm = new FrmTimKiemHoaDon();
+            new TimKiemHoaDonController(frm); // gắn sự kiện và tìm kiếm lần đầu
+            winTimKiemHoaDon.setContentPane(frm);
             winTimKiemHoaDon.setVisible(true);
         });
     }
