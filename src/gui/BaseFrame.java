@@ -131,15 +131,20 @@ public class BaseFrame extends JFrame {
 			return;
 		}
 		if ("Nhập/Xuất phụ tùng".equals(featureName)) {
+			// FrmDangNhap taiKhoan = new FrmDangNhap(this);
+			// taiKhoanDangNhap = taiKhoan.phanQuyen();
 			setContent(new FrmNhapXuatPhuTung(taiKhoanDangNhap));
 			lblStatus.setText("Lập phiếu nhập kho phụ tùng");
 			return;
 		}
+		if ("Phụ tùng tồn kho".equals(featureName)) {
 		if ("Thống kê Phụ tùng".equals(featureName)) {
 			setContent(new FrmThongKeTonKho());
 			lblStatus.setText("Thống kê tồn kho phụ tùng");
 			return;
 		}
+		if ("Hóa đơn".equals(featureName) || "Lập hóa đơn".equals(featureName)) {
+			setContent(new FrmHoaDon());
 		if ("Hóa đơn".equals(featureName)) {
 			setContent(new FrmTimKiemHoaDon());
 			lblStatus.setText("Tìm kiếm hóa đơn");
@@ -163,6 +168,11 @@ public class BaseFrame extends JFrame {
 			lblStatus.setText("Dịch vụ sửa chữa");
 			return;
 		}
+
+		if ("Cập nhật khuyến mãi".equals(featureName)
+				|| "Khuyến mãi".equals(featureName)) {
+			setContent(new FrmKhuyenMai());
+			lblStatus.setText("Cập nhật khuyến mãi");
 		if ("Cập nhật khuyến mãi".equals(featureName)) {
 			setContent(new FrmKhuyenMai());
 			lblStatus.setText("Quản lý khuyến mãi");
