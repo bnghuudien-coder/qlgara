@@ -22,13 +22,13 @@ public class MenuNV extends JMenuBar {
 		JMenu mnuSearch = MenuBarSupport.createMenu("Tìm kiếm", MenuIcon.Type.SEARCH);
 		JMenu mnuReports = MenuBarSupport.createMenu("Báo biểu", MenuIcon.Type.CHART);
 
-		themItem(mnuSystem, "Đổi mật khẩu", "Đăng xuất");
+		themItem(mnuSystem, "Trang Chủ", "Đổi mật khẩu", "Đăng xuất");
 		themItem(mnuCatalog, "Khách hàng", "Xe", "Phụ tùng", "Dịch vụ sửa chữa");
 		themItem(mnuUpdate, "Cập nhật khách hàng", "Cập nhật xe",
 				"Cập nhật phụ tùng", "Cập nhật dịch vụ");
 		themItem(mnuProcess, "Tiếp nhận xe", "Kiểm tra xe", "Lập phiếu sửa chữa",
-				"Xuất phụ tùng", "Lập hóa đơn", "Thanh toán",
-				"Bàn giao xe");
+				"Nhập/Xuất phụ tùng", "Lập hóa đơn", "Thanh toán",
+				"Tiếp nhận bảo hành", "Bàn giao xe");
 		themItem(mnuSearch, "Khách hàng", "Xe", "Lịch sử sửa chữa", "Phiếu tiếp nhận",
 				"Phiếu sửa chữa", "Hóa đơn", "Phụ tùng");
 		themItem(mnuReports, "Phiếu tiếp nhận", "Phiếu kiểm tra", "Phiếu sửa chữa", "Hóa đơn");

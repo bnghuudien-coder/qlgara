@@ -103,7 +103,8 @@ final class MenuBarSupport {
 		} else {
 			String hoTenNhanVien = escapeHtml(taiKhoan.getHoTenNhanVien());
 			String tenDangNhap = escapeHtml(taiKhoan.getTenDangNhap());
-			String maNhanVien = escapeHtml(taiKhoan.getMaNV());
+			String maNhanVien = escapeHtml(
+					taiKhoan.getNhanVien() == null ? null : taiKhoan.getNhanVien().getMaNV());
 			String vaiTro = escapeHtml(taiKhoan.getVaiTro());
 			String tenHienThi = "—".equals(hoTenNhanVien) ? tenDangNhap : hoTenNhanVien;
 			text = "<html><b>Xin chào, " + tenHienThi + "</b><br>Mã NV: "

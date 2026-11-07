@@ -4,8 +4,6 @@ import dao.KhachHangDAO;
 import dao.XeDAO;
 import entity.KhachHang;
 import entity.Xe;
-import gui.AppLabel.Style;
-
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -13,11 +11,11 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.Point;
 import java.sql.SQLException;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -38,12 +36,13 @@ import javax.swing.JSplitPane;
 import javax.swing.JWindow;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
+import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
-import javax.swing.SwingUtilities;
+import util.MaTuDong;
 
 public class FrmXe extends JPanel {
     private static final Set<String> MA_KHACH_HANG_DA_BIET = new HashSet<>();
@@ -84,6 +83,7 @@ public class FrmXe extends JPanel {
         setLayout(new BorderLayout(0, 8));
         setBackground(UIConfig.COLOR_BACKGROUND);
         setBorder(new EmptyBorder(14, 22, 14, 22));
+        txtMaXe.setEditable(false);
 
         add(createHeading(), BorderLayout.NORTH);
         add(createContent(), BorderLayout.CENTER);
@@ -92,6 +92,7 @@ public class FrmXe extends JPanel {
         configureComponents();
         napKhachHang();
         napDanhSachXe();
+        lamMoiForm();
     }
 
     private JPanel createHeading() {
@@ -134,14 +135,14 @@ public class FrmXe extends JPanel {
         JLabel lblFormTitle = createSectionTitle("Thông tin xe");
         JPanel pnlFields = new JPanel(new GridBagLayout());
         pnlFields.setOpaque(false);
-        addField(pnlFields, "Mã xe *", txtMaXe, 0, 0);
+        addField(pnlFields, "Mã xe (tự động)", txtMaXe, 0, 0);
         addField(pnlFields, "Biển số *", txtBienSo, 2, 0);
-        addField(pnlFields, "Hãng xe", txtHangXe, 0, 1);
-        addField(pnlFields, "Dòng xe", txtDongXe, 2, 1);
-        addField(pnlFields, "Năm sản xuất", txtNamSanXuat, 0, 2);
+        addField(pnlFields, "Hãng xe *", txtHangXe, 0, 1);
+        addField(pnlFields, "Dòng xe *", txtDongXe, 2, 1);
+        addField(pnlFields, "Năm sản xuất *", txtNamSanXuat, 0, 2);
         addField(pnlFields, "Khách hàng *", txtKhachHang, 2, 2);
-        addField(pnlFields, "Số khung", txtSoKhung, 0, 3);
-        addField(pnlFields, "Số máy", txtSoMay, 2, 3);
+        addField(pnlFields, "Số khung *", txtSoKhung, 0, 3);
+        addField(pnlFields, "Số máy *", txtSoMay, 2, 3);
 
         JPanel pnlButtons = new JPanel(new GridBagLayout());
         pnlButtons.setOpaque(false);
@@ -488,31 +489,49 @@ public class FrmXe extends JPanel {
 
     private Xe docThongTinXe() {
         String maXe = txtMaXe.getText().trim();
-        String bienSo = txtBienSo.getText().trim();
+        String bienSo = txtBienSo.getText().trim().toUpperCase(Locale.ROOT);
         if (maXe.isEmpty() || bienSo.isEmpty()) {
             throw new IllegalArgumentException("Mã xe và biển số không được để trống.");
+        }
+        if (!FormValidator.isValidLicensePlate(bienSo)) {
+            throw new IllegalArgumentException(
+                    "Biển số xe không đúng định dạng (ví dụ: 30A-123.45 hoặc 30A-12345).");
+        }
+        String hangXe = txtHangXe.getText().trim();
+        String dongXe = txtDongXe.getText().trim();
+        String namSanXuatText = txtNamSanXuat.getText().trim();
+        String soKhung = txtSoKhung.getText().trim();
+        String soMay = txtSoMay.getText().trim();
+        if (hangXe.isEmpty() || dongXe.isEmpty() || namSanXuatText.isEmpty()
+                || soKhung.isEmpty() || soMay.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Hãng xe, dòng xe, năm sản xuất, số khung và số máy không được để trống.");
+        }
+        if (!FormValidator.isWithinMaxLength(txtHangXe.getText().trim(), 50)
+                || !FormValidator.isWithinMaxLength(txtDongXe.getText().trim(), 50)) {
+            throw new IllegalArgumentException("Hãng xe và dòng xe không được vượt quá 50 ký tự.");
+        }
+        if (!FormValidator.isWithinMaxLength(txtSoKhung.getText().trim(), 50)
+                || !FormValidator.isWithinMaxLength(txtSoMay.getText().trim(), 50)) {
+            throw new IllegalArgumentException("Số khung và số máy không được vượt quá 50 ký tự.");
         }
         if (khachHangDuocChon == null) {
             throw new IllegalArgumentException("Hãy tìm và chọn khách hàng từ danh sách gợi ý.");
         }
 
-        Integer namSanXuat = null;
-        String namSanXuatText = txtNamSanXuat.getText().trim();
-        if (!namSanXuatText.isEmpty()) {
-            try {
-                namSanXuat = Integer.valueOf(namSanXuatText);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("Năm sản xuất phải là số nguyên.");
-            }
+        if (!FormValidator.isValidOptionalProductionYear(namSanXuatText)) {
+            throw new IllegalArgumentException(
+                    "Năm sản xuất phải là số từ 1886 đến " + java.time.Year.now().getValue() + ".");
         }
+        Integer namSanXuat = Integer.valueOf(namSanXuatText);
         return new Xe(
                 maXe,
                 bienSo,
-                giaTriRongLaNull(txtHangXe.getText()),
-                giaTriRongLaNull(txtDongXe.getText()),
+                hangXe,
+                dongXe,
                 namSanXuat,
-                giaTriRongLaNull(txtSoKhung.getText()),
-                giaTriRongLaNull(txtSoMay.getText()),
+                soKhung,
+                soMay,
                 khachHangDuocChon.getMaKH());
     }
 
@@ -612,11 +631,6 @@ public class FrmXe extends JPanel {
                 .toLowerCase(Locale.ROOT);
     }
 
-    private String giaTriRongLaNull(String value) {
-        String trimmedValue = value.trim();
-        return trimmedValue.isEmpty() ? null : trimmedValue;
-    }
-
     private void hienThiXeDaChon() {
         int selectedRow = tblXe.getSelectedRow();
         if (selectedRow < 0) {
@@ -649,7 +663,12 @@ public class FrmXe extends JPanel {
     }
 
     private void lamMoiForm() {
-        txtMaXe.setText("");
+        try {
+            txtMaXe.setText(MaTuDong.sinhMa(
+                    MaTuDong.TIEN_TO_XE, xeDAO.findAll(), Xe::getMaXe));
+        } catch (SQLException exception) {
+            hienThiLoi("Không thể phát sinh mã xe: " + exception.getMessage());
+        }
         txtBienSo.setText("");
         txtHangXe.setText("");
         txtDongXe.setText("");

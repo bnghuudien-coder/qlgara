@@ -34,7 +34,10 @@ public class FrmDangNhap extends JPanel {
 	private final JTextField txtTenDangNhap = new JTextField(22);
 	private final JPasswordField pwdMatKhau = new JPasswordField(22);
 	private final JCheckBox chkHienMatKhau = new JCheckBox("Hiển thị mật khẩu");
+	public static TaiKhoan taiKhoanDangNhap;
 
+
+	//Xây dựng giao diện Đăng nhập
 	public FrmDangNhap(BaseFrame frame) {
 		this.frame = frame;
 		setLayout(new GridBagLayout());
@@ -51,11 +54,11 @@ public class FrmDangNhap extends JPanel {
 		JPanel pnlHeader = new JPanel(new BorderLayout(0, 7));
 		pnlHeader.setBackground(BLUE);
 		pnlHeader.setBorder(new EmptyBorder(24, 30, 22, 30));
-		JLabel lblTitle = new JLabel("ĐĂNG NHẬP", SwingConstants.CENTER);
-		lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 23));
+		JLabel lblTitle = new JLabel("HỆ THỐNG QUẢN LÍ GARA OTO", SwingConstants.CENTER);
+		lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 21));
 		lblTitle.setForeground(Color.WHITE);
-		JLabel lblSubtitle = new JLabel("Hệ thống quản lý gara ô tô", SwingConstants.CENTER);
-		lblSubtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+		JLabel lblSubtitle = new JLabel("Đăng Nhập", SwingConstants.CENTER);
+		lblSubtitle.setFont(new Font("Segoe UI", Font.PLAIN, 16));
 		lblSubtitle.setForeground(new Color(225, 235, 255));
 		pnlHeader.add(lblTitle, BorderLayout.CENTER);
 		pnlHeader.add(lblSubtitle, BorderLayout.SOUTH);
@@ -92,8 +95,8 @@ public class FrmDangNhap extends JPanel {
 		chkHienMatKhau.setOpaque(false);
 		chkHienMatKhau.setForeground(MUTED);
 		chkHienMatKhau.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-		chkHienMatKhau.addActionListener(event ->
-				pwdMatKhau.setEchoChar(chkHienMatKhau.isSelected() ? (char) 0 : '\u2022'));
+		chkHienMatKhau
+				.addActionListener(event -> pwdMatKhau.setEchoChar(chkHienMatKhau.isSelected() ? (char) 0 : '\u2022'));
 		pnlForm.add(chkHienMatKhau, gbc);
 
 		gbc.gridy++;
@@ -148,54 +151,57 @@ public class FrmDangNhap extends JPanel {
 				new EmptyBorder(7, 11, 7, 11)));
 	}
 
-	public void phanQuyen() {
+	public TaiKhoan phanQuyen() {
 		String tenDangNhap = txtTenDangNhap.getText().trim();
 		char[] matKhauChars = pwdMatKhau.getPassword();
 		if (tenDangNhap.isEmpty() || matKhauChars.length == 0) {
 			java.util.Arrays.fill(matKhauChars, '\0');
 			JOptionPane.showMessageDialog(this, "Vui lòng nhập tên đăng nhập và mật khẩu.",
 					"Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-			return;
+			return null;
 		}
 
 		try {
-			TaiKhoan taiKhoan = new TaiKhoanDAO().dangNhap(tenDangNhap, new String(matKhauChars));
-			if (taiKhoan == null) {
+			taiKhoanDangNhap = new TaiKhoanDAO().dangNhap(tenDangNhap, new String(matKhauChars));
+			if (taiKhoanDangNhap == null) {
 				JOptionPane.showMessageDialog(this, "Tên đăng nhập hoặc mật khẩu không đúng.",
 						"Đăng nhập thất bại", JOptionPane.ERROR_MESSAGE);
-				return;
+				return null;
 			}
-			if (!taiKhoanDangHoatDong(taiKhoan.getTrangThai())) {
+			if (!taiKhoanDangHoatDong(taiKhoanDangNhap.getTrangThai())) {
 				JOptionPane.showMessageDialog(this,
 						"Tài khoản hiện không hoạt động. Trạng thái trong TaiKhoan: ["
-								+ taiKhoan.getTrangThai() + "].",
+								+ taiKhoanDangNhap.getTrangThai() + "].",
 						"Không thể đăng nhập", JOptionPane.WARNING_MESSAGE);
-				return;
+				return null;
 			}
-
-			String vaiTro = chuanHoa(taiKhoan.getVaiTro()).replaceAll("\\s+", "");
+			frame.setTaiKhoanDangNhap(taiKhoanDangNhap);
+			String vaiTro = chuanHoa(taiKhoanDangNhap.getVaiTro()).replaceAll("\\s+", "");
 			if (vaiTro.contains("quanly") || vaiTro.contains("admin")) {
-				frame.hienThiMenu(new MenuQL(frame, taiKhoan), "Đăng nhập với quyền quản lý");
+				frame.hienThiMenu(new MenuQL(frame, taiKhoanDangNhap), "Đăng nhập với quyền quản lý");
 			} else if (vaiTro.contains("nhanvien") || vaiTro.contains("employee")) {
-				frame.hienThiMenu(new MenuNV(frame, taiKhoan), "Đăng nhập với quyền nhân viên");
+				frame.hienThiMenu(new MenuNV(frame, taiKhoanDangNhap), "Đăng nhập với quyền nhân viên");
 			} else {
 				JOptionPane.showMessageDialog(this,
-						"Vai trò tài khoản chưa được hỗ trợ: " + taiKhoan.getVaiTro(),
+						"Vai trò tài khoản chưa được hỗ trợ: " + taiKhoanDangNhap.getVaiTro(),
 						"Không thể phân quyền", JOptionPane.ERROR_MESSAGE);
 			}
+			return taiKhoanDangNhap;
+
 		} catch (SQLException exception) {
 			JOptionPane.showMessageDialog(this,
 					"Không thể xác thực tài khoản do lỗi cơ sở dữ liệu: " + exception.getMessage(),
 					"Lỗi đăng nhập", JOptionPane.ERROR_MESSAGE);
+			return null;
 		} finally {
 			java.util.Arrays.fill(matKhauChars, '\0');
 		}
 	}
 
 	private boolean taiKhoanDangHoatDong(String trangThai) {
-		// Giá trị null hoặc chuỗi rỗng được coi là không ràng buộc (mặc định cho phép)
+		// Giá trị null hoặc chuỗi rỗng được coi là không hoạt động
 		if (trangThai == null || trangThai.isBlank()) {
-			return true;
+			return false;
 		}
 		// Chuẩn hoá Unicode và loại bỏ dấu, sau đó loại bỏ mọi ký tự không phải chữ/ số
 		String trangThaiChuanHoa = chuanHoa(trangThai)
@@ -209,11 +215,7 @@ public class FrmDangNhap extends JPanel {
 			return true;
 		}
 
-		// Nếu chuỗi chứa cả 'hoat' và 'dong' ở bất kỳ vị trí nào thì vẫn coi là hoạt động
-		if (trangThaiChuanHoa.contains("hoat") && trangThaiChuanHoa.contains("dong")) {
-			return true;
-		}
-		return false;
+		return false;
 	}
 
 	private String chuanHoa(String giaTri) {
@@ -223,6 +225,8 @@ public class FrmDangNhap extends JPanel {
 		return Normalizer.normalize(giaTri, Normalizer.Form.NFD)
 				.replaceAll("\\p{M}", "")
 				.toLowerCase()
+				.replace('đ', 'd')
 				.trim();
 	}
+
 }
